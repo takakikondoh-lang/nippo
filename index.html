@@ -31,8 +31,8 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .htab.active{color:var(--ink);border-bottom-color:var(--accent)}
 #hdate{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;color:var(--ink-light)}
 
-/* SHELL — 4カラム */
-.shell{flex:1;display:grid;grid-template-columns:210px 1fr 440px 200px;min-height:0;overflow:hidden}
+/* SHELL — 3カラム */
+.shell{flex:1;display:grid;grid-template-columns:220px 1fr 440px;min-height:0;overflow:hidden}
 .col{overflow:hidden;display:flex;flex-direction:column}
 .col-left{border-right:1px solid var(--rule);background:var(--paper-card)}
 .col-rpreview{border-left:1px solid var(--rule);background:var(--paper-card)}
@@ -133,28 +133,15 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .rslot:first-child{border-bottom:1px solid var(--rule)}
 .rslot::-webkit-scrollbar{width:3px}
 .rslot::-webkit-scrollbar-thumb{background:var(--ink-faint)}
-.rslot-date{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;color:var(--accent);margin-bottom:.55rem;flex-shrink:0;font-weight:500}
+.rslot-date{margin-bottom:.6rem;flex-shrink:0}
+.rslot-date-main{font-family:var(--serif);font-size:1rem;font-weight:500;color:var(--ink);line-height:1.2}
+.rslot-date-sub{font-family:var(--mono);font-size:.68rem;color:var(--accent);margin-top:3px;letter-spacing:.05em}
 .rslot-body{font-size:.88rem;line-height:1.8;color:var(--ink);white-space:pre-wrap;word-break:break-word;flex:1;font-family:var(--sans)}
 .rslot-body.empty{color:var(--ink-faint);font-style:italic;font-family:var(--serif)}
 .rslot-body a{color:var(--accent);text-decoration:underline}
 .rslot-edit{flex-shrink:0;margin-top:.5rem}
 .rslot-edit button{font-family:var(--mono);font-size:.68rem;color:var(--ink-light);background:none;border:none;cursor:pointer;letter-spacing:.05em}
 .rslot-edit button:hover{color:var(--accent)}
-
-/* RIGHT INFO PANE */
-.info-pane{display:flex;flex-direction:column;height:100%}
-.info-header{flex-shrink:0;padding:.75rem 1rem .6rem;border-bottom:1px solid var(--rule)}
-.info-date-lbl{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;color:var(--accent);font-weight:500}
-.info-body{flex:1;overflow-y:auto;padding:1rem}
-.info-body::-webkit-scrollbar{width:3px}
-.info-body::-webkit-scrollbar-thumb{background:var(--ink-faint);border-radius:2px}
-.info-section-label{font-family:var(--mono);font-size:.65rem;letter-spacing:.1em;color:var(--ink-light);border-bottom:1px solid var(--rule);padding-bottom:.35rem;margin-bottom:.75rem}
-.koyomi-grid{display:flex;flex-direction:column;gap:10px}
-.koyomi-item{display:flex;flex-direction:column;gap:2px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
-.koyomi-item:last-child{border-bottom:none;padding-bottom:0}
-.koyomi-key{font-family:var(--mono);font-size:.65rem;color:var(--ink-light);letter-spacing:.06em}
-.koyomi-val{font-size:1rem;color:var(--ink);font-weight:500}
-.koyomi-val.big{font-size:1.3rem}
 
 /* BUTTONS */
 .btn{font-family:var(--mono);font-size:.75rem;letter-spacing:.07em;padding:7px 15px;border-radius:var(--r);cursor:pointer;border:1px solid var(--ink-faint);background:var(--paper-card);color:var(--ink-mid);transition:all .15s}
@@ -191,7 +178,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 
 <div class="shell">
 
-  <!-- LEFT: カレンダー -->
+  <!-- LEFT: カレンダー＋エクスポート -->
   <div class="col col-left">
     <div class="col-inner">
       <div class="cal-nav">
@@ -202,6 +189,13 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       <div class="cal-grid" id="cal-grid"></div>
       <hr class="cal-divider">
       <div class="cal-legend">● 記録あり</div>
+      <hr class="cal-divider">
+      <div class="box-label">EXPORT — MD</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:.5rem">
+        <select id="export-year" style="width:100%"></select>
+        <select id="export-month" style="width:100%"></select>
+        <button class="btn primary" style="width:100%;justify-content:center" onclick="exportMarkdown()">ダウンロード</button>
+      </div>
     </div>
   </div>
 
@@ -256,14 +250,6 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
             <button class="btn" onclick="generateWeeklyReview()">週次振り返りを生成</button>
           </div>
         </div>
-        <div class="sbox">
-          <div class="box-label">EXPORT — MARKDOWN</div>
-          <div class="export-row">
-            <select id="export-year"></select>
-            <select id="export-month"></select>
-            <button class="btn primary" onclick="exportMarkdown()">ダウンロード</button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -284,18 +270,6 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
     </div>
   </div>
 
-  <!-- RIGHT INFO: 暦情報 -->
-  <div class="col col-rinfo">
-    <div class="info-pane">
-      <div class="info-header">
-        <div class="info-date-lbl" id="info-date-lbl"></div>
-      </div>
-      <div class="info-body">
-        <div class="info-section-label">暦・六曜</div>
-        <div class="koyomi-grid" id="koyomi-grid"></div>
-      </div>
-    </div>
-  </div>
 
 </div>
 
@@ -333,6 +307,15 @@ function diffLabel(n){if(n===0)return'選択日';if(n===-1)return'前日';if(n==
 // ─── INIT ─────────────────────────────────
 function init(){
   try{logs=JSON.parse(localStorage.getItem('nippo_v4')||'[]')}catch(e){logs=[]}
+  // 旧バージョンのデータを移行（nippo_v2 / nippo_v3）
+  if(!logs.length){
+    for(const oldKey of['nippo_v3','nippo_v2']){
+      try{
+        const old=JSON.parse(localStorage.getItem(oldKey)||'[]');
+        if(old.length){logs=old;localStorage.setItem('nippo_v4',JSON.stringify(logs));break}
+      }catch(e){}
+    }
+  }
   calYear=_today.getFullYear();calMonth=_today.getMonth();selectedDate=todayStr;
   document.getElementById('hdate').textContent=todayStr;
   const ta=document.getElementById('entry-text');
@@ -340,7 +323,6 @@ function init(){
   setupDialog();
   renderCal();updateHeading();loadEntry(selectedDate);
   renderRight();renderStats();populateExport();
-  renderInfo(selectedDate);
 }
 
 // ─── DIRTY / DIALOG ──────────────────────
@@ -404,15 +386,14 @@ function selectDay(ds){
   selectedDate=ds;rOffset=0;
   renderCal();updateHeading();loadEntry(ds);
   document.getElementById('ai-box').style.display='none';
-  renderRight();renderInfo(ds);
+  renderRight();
   switchView('write');
 }
 function updateHeading(){
   const[y,m,d]=selectedDate.split('-');
   const dow=dowStr(selectedDate);
   document.getElementById('write-heading-main').textContent=`${y}年${+m}月${+d}日（${dow}）`;
-  const era=getEra(selectedDate);
-  document.getElementById('write-heading-sub').textContent=era;
+  document.getElementById('write-heading-sub').textContent=`${y}`;
 }
 function loadEntry(ds){
   const l=logs.find(l=>l.date===ds);
@@ -475,7 +456,8 @@ function renderSlot(id,ds,diff){
   slot.innerHTML='';
   const dateDiv=document.createElement('div');
   dateDiv.className='rslot-date';
-  dateDiv.textContent=`${ds}（${dowStr(ds)}）— ${diffLabel(diff)}`;
+  const[dy,dm,dd]=ds.split('-');
+  dateDiv.innerHTML=`<div class="rslot-date-main">${dy}年${+dm}月${+dd}日（${dowStr(ds)}）</div><div class="rslot-date-sub">${diffLabel(diff)}</div>`;
   slot.appendChild(dateDiv);
   const body=document.createElement('div');
   body.className='rslot-body'+(log?'':' empty');
@@ -494,72 +476,6 @@ function renderSlot(id,ds,diff){
   }
 }
 
-// ─── INFO PANE ───────────────────────────
-const ROKUYO=['大安','赤口','先勝','友引','先負','仏滅'];
-const SEKKI=[
-  [1,6,'小寒'],[1,20,'大寒'],[2,4,'立春'],[2,19,'雨水'],[3,6,'啓蟄'],[3,21,'春分'],
-  [4,5,'清明'],[4,20,'穀雨'],[5,6,'立夏'],[5,21,'小満'],[6,6,'芒種'],[6,21,'夏至'],
-  [7,7,'小暑'],[7,23,'大暑'],[8,7,'立秋'],[8,23,'処暑'],[9,8,'白露'],[9,23,'秋分'],
-  [10,8,'寒露'],[10,23,'霜降'],[11,7,'立冬'],[11,22,'小雪'],[12,7,'大雪'],[12,22,'冬至']
-];
-const ERAS=[{y:2019,m:5,d:1,name:'令和'},{y:1989,m:1,d:8,name:'平成'},{y:1926,m:12,d:25,name:'昭和'}];
-const KINEN_DAYS={
-  '1-1':'元日','2-3':'節分（目安）','2-11':'建国記念の日','2-14':'バレンタインデー',
-  '3-3':'ひな祭り','3-14':'ホワイトデー','3-20':'春分の日（目安）','4-1':'エイプリルフール',
-  '4-29':'昭和の日','5-3':'憲法記念日','5-4':'みどりの日','5-5':'こどもの日',
-  '6-1':'衣替え','7-7':'七夕','7-20':'海の日（目安）','8-11':'山の日','8-15':'終戦記念日',
-  '9-15':'敬老の日（目安）','9-23':'秋分の日（目安）','10-31':'ハロウィン',
-  '11-3':'文化の日','11-15':'七五三','11-23':'勤労感謝の日',
-  '12-24':'クリスマスイブ','12-25':'クリスマス','12-31':'大晦日'
-};
-
-function getRokuyo(ds){
-  const[y,m,d]=ds.split('-').map(Number);
-  // 旧暦計算（簡易：天保暦近似）
-  const jd=Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m<=2?m+13:m+1))+(m<=2?y-1:y)+d-1524.5;
-  const lm=Math.floor((jd-1721425.5-29.53059)/29.53059);
-  const lmStart=1721425.5+29.53059*(lm+0.5);
-  const ld=Math.floor(jd-lmStart)+1;
-  return ROKUYO[(((m<=2?m+12:m)+ld-1)%6+6)%6];
-}
-
-function getSekki(ds){
-  const[y,m,d]=ds.split('-').map(Number);
-  for(const[sm,sd,name]of SEKKI){if(sm===m&&sd===d)return name}
-  return null;
-}
-
-function getEra(ds){
-  const[y,m,d]=ds.split('-').map(Number);
-  for(const e of ERAS){
-    if(y>e.y||(y===e.y&&(m>e.m||(m===e.m&&d>=e.d)))){
-      let ey=y-e.y+1;
-      return`${e.name}${ey===1?'元':ey}年`;
-    }
-  }
-  return`${y}年`;
-}
-
-function renderInfo(ds){
-  const[y,m,d]=ds.split('-').map(Number);
-  document.getElementById('info-date-lbl').textContent=`${ds}（${dowStr(ds)}）`;
-  const rk=getRokuyo(ds);
-  const sk=getSekki(ds);
-  const era=getEra(ds);
-  const kinen=KINEN_DAYS[`${m}-${d}`]||null;
-  const grid=document.getElementById('koyomi-grid');
-  const items=[
-    ['元号',era,true],
-    ['六曜',rk,true],
-    ['節気',sk||'—',false],
-    ...(kinen?[['記念日',kinen,false]]:[])
-  ];
-  grid.innerHTML=items.map(([k,v,big])=>`
-    <div class="koyomi-item">
-      <div class="koyomi-key">${k}</div>
-      <div class="koyomi-val${big?' big':''}">${v}</div>
-    </div>`).join('');
-}
 
 
 // ─── URL / OG ────────────────────────────
