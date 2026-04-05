@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>業務日報</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500&family=Noto+Sans+JP:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -188,6 +189,14 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <select id="export-month" style="width:100%"></select>
         <button class="btn primary" style="width:100%;justify-content:center" onclick="exportMarkdown()">ダウンロード</button>
       </div>
+      <hr class="cal-divider">
+      <div class="box-label">IMPORT — XLSX</div>
+      <div style="margin-top:.5rem;font-family:var(--mono);font-size:.62rem;color:var(--ink-light);line-height:1.6;margin-bottom:.6rem">A列:日付　B列:本文</div>
+      <label style="display:block;cursor:pointer">
+        <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)">
+        <span class="btn" style="display:block;text-align:center;width:100%">ファイルを選択</span>
+      </label>
+      <div id="import-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.5rem;line-height:1.6"></div>
     </div>
   </div>
 
@@ -577,6 +586,74 @@ function exportMarkdown(){
 }
 
 init();
+
+// ─── IMPORT ──────────────────────────────
+async function importExcel(input){
+  const file=input.files[0];
+  if(!file)return;
+  const status=document.getElementById('import-status');
+  status.textContent='読み込み中…';
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+    const toDateStr=v=>{
+      if(!v)return null;
+      let d;
+      if(v instanceof Date){d=v}
+      else if(typeof v==='number'){d=new Date(Math.round((v-25569)*86400000))}
+      else{d=new Date(v)}
+      if(isNaN(d))return null;
+      return fmt(d);
+    };
+
+    // ヘッダー行スキップ（1行目が日付でなければスキップ）
+    let startRow=0;
+    if(rows.length&&!toDateStr(rows[0][0]))startRow=1;
+
+    const newEntries=[];
+    for(let i=startRow;i<rows.length;i++){
+      const[col0,col1]=rows[i];
+      const ds=toDateStr(col0);
+      const text=String(col1||'').trim();
+      if(!ds||!text)continue;
+      newEntries.push({date:ds,text});
+    }
+
+    if(!newEntries.length){status.style.color='var(--red,#c0392b)';status.textContent='有効なデータが見つかりませんでした。';input.value='';return}
+
+    // 重複チェック
+    const overlap=newEntries.filter(e=>logs.some(l=>l.date===e.date));
+    let proceed=true;
+    if(overlap.length){
+      proceed=confirm(`${overlap.length}件の日付が既存データと重複しています。\n重複分を上書きしてインポートしますか？\n\nキャンセルすると重複分をスキップします。`);
+    }
+
+    let added=0,updated=0,skipped=0;
+    newEntries.forEach(e=>{
+      const idx=logs.findIndex(l=>l.date===e.date);
+      if(idx>=0){
+        if(proceed){logs[idx]={...logs[idx],text:e.text,saved:new Date().toISOString()};updated++}
+        else{skipped++}
+      }else{
+        logs.unshift({date:e.date,text:e.text,saved:new Date().toISOString()});added++;
+      }
+    });
+    logs.sort((a,b)=>b.date.localeCompare(a.date));
+    localStorage.setItem('nippo_v4',JSON.stringify(logs));
+
+    renderCal();renderStats();renderRight();populateExport();
+    status.style.color='var(--accent)';
+    status.textContent=`完了：新規${added}件、更新${updated}件${skipped?`、スキップ${skipped}件`:''}`;
+    input.value='';
+  }catch(e){
+    status.style.color='var(--red,#c0392b)';
+    status.textContent='エラー: '+e.message;
+    input.value='';
+  }
+}
 </script>
 </body>
 </html>
