@@ -69,8 +69,9 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .date-main{font-family:var(--serif);font-size:1.25rem;font-weight:500;color:var(--ink);letter-spacing:.04em;line-height:1}
 .date-sub{font-family:var(--mono);font-size:.75rem;color:var(--ink-light);margin-top:3px}
 .write-body{flex:1;display:flex;flex-direction:column;min-height:0}
-.write-body textarea{flex:1;width:100%;resize:none;padding:1.4rem 2rem;font-family:var(--sans);font-size:1rem;line-height:2;color:var(--ink);background:transparent;border:none;outline:none}
+.write-body textarea{flex:1;width:100%;resize:none;padding:1.4rem 2rem;font-family:var(--sans);font-size:1rem;line-height:2;color:var(--ink);background:transparent;border:none;outline:none;display:block}
 .write-body textarea::placeholder{color:var(--ink-light)}
+#entry-preview a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 .write-footer{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:.65rem 1.75rem;border-top:1px solid var(--rule)}
 .char-count{font-family:var(--mono);font-size:.73rem;color:var(--ink-light)}
 .unsaved-badge{font-family:var(--mono);font-size:.7rem;color:var(--accent);opacity:0;transition:opacity .2s}
@@ -202,19 +203,20 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
             <div class="date-sub" id="write-heading-sub"></div>
           </div>
         </div>
-        <div class="btn-row">
-          <button class="btn" onclick="generateSummary()">AI 要約</button>
-          <button class="btn primary" onclick="saveEntry()">保存</button>
+        <div class="btn-row" id="write-btns">
+          <button class="btn" id="btn-ai" onclick="generateSummary()">AI 要約</button>
+          <button class="btn primary" id="btn-save" onclick="saveEntry()">保存</button>
         </div>
       </div>
       <div class="write-body">
-        <textarea id="entry-text" placeholder="今日の作業・気づき・課題など自由に記述…&#10;URLを貼るとリンクカードになります。"></textarea>
+        <div id="entry-preview" style="display:none;flex:1;overflow-y:auto;padding:1.4rem 2rem;font-family:var(--sans);font-size:1rem;line-height:2;color:var(--ink);white-space:pre-wrap;word-break:break-word"></div>
+        <textarea id="entry-text" placeholder="今日の作業・気づき・課題など自由に記述…"></textarea>
         <div class="ai-box" id="ai-box">
           <div class="ai-box-label">AI SUMMARY</div>
           <div id="ai-text"></div>
         </div>
       </div>
-      <div class="write-footer">
+      <div class="write-footer" id="write-footer-inner">
         <span class="unsaved-badge" id="unsaved-badge">● 未保存</span>
         <span class="char-count" id="char-count">0 文字</span>
       </div>
@@ -389,9 +391,57 @@ function updateHeading(){
 }
 function loadEntry(ds){
   const l=logs.find(l=>l.date===ds);
-  document.getElementById('entry-text').value=l?l.text:'';
-  updateCC();setDirty(false);
+  const isToday=ds===todayStr;
+  if(isToday){
+    // 今日は最初から編集モード
+    setEditMode(true, l?l.text:'');
+  } else {
+    // 今日以外はプレビューモード
+    setEditMode(false, l?l.text:'');
+  }
+  setDirty(false);
 }
+
+function setEditMode(editing, text){
+  const ta=document.getElementById('entry-text');
+  const pv=document.getElementById('entry-preview');
+  const btnAI=document.getElementById('btn-ai');
+  const btnSave=document.getElementById('btn-save');
+  const footer=document.getElementById('write-footer-inner');
+
+  if(editing){
+    ta.style.display='flex';
+    ta.value=text||'';
+    pv.style.display='none';
+    btnAI.style.display='';
+    btnSave.style.display='';
+    // ヘッダーの「編集する」ボタンを「AI要約/保存」に戻す
+    const editBtn=document.getElementById('btn-edit');
+    if(editBtn)editBtn.remove();
+    updateCC();
+    ta.focus();
+  } else {
+    ta.style.display='none';
+    btnAI.style.display='none';
+    btnSave.style.display='none';
+    // 「編集する」ボタンを追加（なければ）
+    if(!document.getElementById('btn-edit')){
+      const eb=document.createElement('button');
+      eb.id='btn-edit';eb.className='btn';
+      eb.textContent='編集する';
+      eb.onclick=()=>setEditMode(true, logs.find(l=>l.date===selectedDate)?.text||'');
+      document.getElementById('write-btns').appendChild(eb);
+    }
+    // プレビュー表示
+    pv.style.display='block';
+    if(text){
+      renderText(text, pv);
+    } else {
+      pv.innerHTML='<span style="color:var(--ink-faint);font-style:italic">（記録なし）</span>';
+    }
+  }
+}
+
 function updateCC(){
   document.getElementById('char-count').textContent=`${document.getElementById('entry-text').value.length.toLocaleString()} 文字`;
 }
@@ -419,6 +469,10 @@ function saveEntry(){
   if(!text){alert('内容を入力してください。');return}
   _doSave();
   renderCal();renderStats();renderRight();populateExport();
+  // 今日以外はプレビューモードに戻す
+  if(selectedDate!==todayStr){
+    setEditMode(false, text);
+  }
   switchView('list');
 }
 function _doSave(){
