@@ -118,11 +118,11 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .rnav-btn{font-family:var(--mono);font-size:1.1rem;background:none;border:none;cursor:pointer;color:var(--ink-light);padding:3px 9px;border-radius:3px;transition:all .15s;line-height:1}
 .rnav-btn:hover{background:var(--accent-faint);color:var(--accent)}
 .rnav-label{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--ink-light)}
-.right-slots{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:10px}
+.right-slots{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:10px;padding:10px;min-height:0}
 .right-slots::-webkit-scrollbar{width:3px}
 .right-slots::-webkit-scrollbar-thumb{background:var(--ink-faint);border-radius:2px}
-.rslot{overflow:visible;padding:1rem 1.1rem;display:flex;flex-direction:column;min-height:80px;background:var(--paper-card);border:1px solid var(--ink-faint);border-radius:10px}
-.rslot:first-child{border-bottom:none}
+.rslot{flex:1;min-height:0;overflow-y:auto;padding:1rem 1.1rem;display:flex;flex-direction:column;background:var(--paper-card);border:1px solid var(--ink-faint);border-radius:10px;cursor:pointer;transition:border-color .15s,background .15s}
+.rslot:hover{border-color:var(--accent-light);background:var(--accent-faint)}
 .rslot::-webkit-scrollbar{width:3px}
 .rslot::-webkit-scrollbar-thumb{background:var(--ink-faint)}
 .rslot-date{margin-bottom:.6rem;flex-shrink:0}
@@ -366,7 +366,6 @@ function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++}renderCal()}
 function selectDay(ds){
   selectedDate=ds;rOffset=0;
   renderCal();updateHeading();loadEntry(ds);
-  document.getElementById('ai-box').style.display='none';
   renderRight();
   switchView('write');
 }
@@ -481,6 +480,8 @@ function renderSlot(id,ds,diff){
   const slot=document.getElementById(id);
   const log=logs.find(l=>l.date===ds);
   slot.innerHTML='';
+  // カード全体をクリックでその日に飛ぶ
+  slot.onclick=()=>guardDirty(()=>selectDay(ds));
   const dateDiv=document.createElement('div');
   dateDiv.className='rslot-date';
   const[dy,dm,dd]=ds.split('-');
@@ -489,18 +490,11 @@ function renderSlot(id,ds,diff){
   const body=document.createElement('div');
   body.className='rslot-body'+(log?'':' empty');
   if(log){
-    body.innerHTML=esc(log.text).replace(URL_RE,u=>`<a href="${u}" target="_blank" rel="noopener">${esc(u)}</a>`);
+    body.innerHTML=esc(log.text).replace(URL_RE,u=>`<a href="${esc(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(u)}</a>`);
   }else{
     body.textContent='（記録なし）';
   }
   slot.appendChild(body);
-  if(log){
-    const ed=document.createElement('div');ed.className='rslot-edit';
-    const btn=document.createElement('button');
-    btn.textContent='この日を編集 →';
-    btn.onclick=()=>guardDirty(()=>selectDay(ds));
-    ed.appendChild(btn);slot.appendChild(ed);
-  }
 }
 
 
