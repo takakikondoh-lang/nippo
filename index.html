@@ -96,14 +96,6 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .expand-btn{font-family:var(--mono);font-size:.7rem;color:var(--ink-light);background:none;border:none;cursor:pointer;padding:3px 0;letter-spacing:.05em;display:block;margin-top:4px}
 .expand-btn:hover{color:var(--accent)}
 
-/* URL CARD */
-.url-card{display:flex;gap:10px;border:1px solid var(--ink-faint);border-radius:var(--r);padding:9px 11px;margin:7px 0;background:var(--paper-card);cursor:pointer;overflow:hidden;transition:border-color .15s}
-.url-card:hover{border-color:var(--accent-light)}
-.url-card-thumb{width:48px;height:48px;border-radius:3px;object-fit:cover;flex-shrink:0;background:var(--paper-warm)}
-.url-card-info{overflow:hidden;flex:1;min-width:0}
-.url-card-title{font-size:.83rem;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.url-card-desc{font-size:.75rem;color:var(--ink-mid);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45}
-.url-card-domain{font-family:var(--mono);font-size:.67rem;color:var(--ink-light);margin-top:4px}
 .highlight{background:var(--accent-faint);border-radius:2px;padding:0 2px}
 
 /* STATS VIEW */
@@ -221,7 +213,6 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
           <div class="ai-box-label">AI SUMMARY</div>
           <div id="ai-text"></div>
         </div>
-        <div id="url-preview" style="padding:0 2rem .5rem;display:flex;flex-direction:column;gap:4px"></div>
       </div>
       <div class="write-footer">
         <span class="unsaved-badge" id="unsaved-badge">● 未保存</span>
@@ -320,7 +311,7 @@ function init(){
   calYear=_today.getFullYear();calMonth=_today.getMonth();selectedDate=todayStr;
   document.getElementById('hdate').textContent=todayStr;
   const ta=document.getElementById('entry-text');
-  ta.addEventListener('input',()=>{updateCC();setDirty(true);scheduleUrlPreview()});
+  ta.addEventListener('input',()=>{updateCC();setDirty(true)});
   setupDialog();
   renderCal();updateHeading();loadEntry(selectedDate);
   renderRight();renderStats();populateExport();
@@ -399,11 +390,7 @@ function updateHeading(){
 function loadEntry(ds){
   const l=logs.find(l=>l.date===ds);
   document.getElementById('entry-text').value=l?l.text:'';
-  // URLプレビューリセット
-  document.getElementById('url-preview').innerHTML='';
-  _previewedUrls.clear();
   updateCC();setDirty(false);
-  if(l)scheduleUrlPreview();
 }
 function updateCC(){
   document.getElementById('char-count').textContent=`${document.getElementById('entry-text').value.length.toLocaleString()} 文字`;
@@ -424,40 +411,6 @@ function switchView(name){
   document.getElementById('vstats').style.display=name==='stats'?'flex':'none';
   if(name==='list')renderList();
   if(name==='stats'){renderStats();populateExport()}
-}
-
-// ─── URL PREVIEW IN WRITE ─────────────────
-let _urlPreviewTimer=null;
-const _previewedUrls=new Set();
-function scheduleUrlPreview(){
-  clearTimeout(_urlPreviewTimer);
-  _urlPreviewTimer=setTimeout(()=>{
-    const text=document.getElementById('entry-text').value;
-    const urls=[...new Set(text.match(URL_RE)||[])];
-    const container=document.getElementById('url-preview');
-    // 新しいURLだけカードを追加
-    urls.forEach(async url=>{
-      if(_previewedUrls.has(url))return;
-      _previewedUrls.add(url);
-      const og=await fetchOG(url);
-      if(!og)return;
-      if(container.querySelector(`[data-og-url="${CSS.escape(url)}"]`))return;
-      const card=document.createElement('div');
-      card.className='url-card';card.dataset.ogUrl=url;
-      card.onclick=()=>window.open(url,'_blank');
-      card.innerHTML=`${og.img?`<img class="url-card-thumb" src="${esc(og.img)}" onerror="this.style.display='none'" loading="lazy">`:'<div class="url-card-thumb" style="display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--ink-light)">URL</div>'}
-        <div class="url-card-info">
-          <div class="url-card-title">${esc(og.title)}</div>
-          ${og.desc?`<div class="url-card-desc">${esc(og.desc)}</div>`:''}
-          <div class="url-card-domain">${esc(og.domain)}</div>
-        </div>`;
-      container.appendChild(card);
-    });
-    // テキストから消えたURLのカードを除去
-    [...container.querySelectorAll('[data-og-url]')].forEach(card=>{
-      if(!urls.includes(card.dataset.ogUrl)){card.remove();_previewedUrls.delete(card.dataset.ogUrl);}
-    });
-  },800);
 }
 
 // ─── SAVE ────────────────────────────────
@@ -517,79 +470,11 @@ function renderSlot(id,ds,diff){
 
 
 
-// ─── URL / OG ────────────────────────────
+// ─── TEXT RENDERING ──────────────────────
 const URL_RE=/https?:\/\/[^\s\u3000\u300c\u300d\uff08\uff09\u3001\u3002\uff0c\uff0e"'<>()\[\]]+/g;
-const ogCache={};
-async function fetchOG(url){
-  if(ogCache[url]!==undefined)return ogCache[url];
-  ogCache[url]=null;
-  try{
-    const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-    const data=await r.json();
-    const doc=new DOMParser().parseFromString(data.contents,'text/html');
-    const g=n=>doc.querySelector(`meta[property="${n}"]`)?.content||doc.querySelector(`meta[name="${n}"]`)?.content||'';
-    ogCache[url]={title:g('og:title')||doc.title||'',desc:g('og:description')||g('description')||'',img:g('og:image')||'',domain:new URL(url).hostname.replace('www.','')};
-  }catch(e){}
-  return ogCache[url];
-}
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-
-// OGPをcorsproxy.io経由で取得（alloriginsより安定）
-async function fetchOG(url){
-  if(ogCache[url]!==undefined)return ogCache[url];
-  ogCache[url]=null;
-  // 複数プロキシを順番に試す
-  const proxies=[
-    u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  ];
-  for(const proxy of proxies){
-    try{
-      const r=await fetch(proxy(url),{signal:AbortSignal.timeout(6000)});
-      if(!r.ok)continue;
-      const html=await r.text();
-      const doc=new DOMParser().parseFromString(html,'text/html');
-      const g=n=>doc.querySelector(`meta[property="${n}"]`)?.content||doc.querySelector(`meta[name="${n}"]`)?.content||'';
-      const title=g('og:title')||doc.title||'';
-      if(!title)continue;
-      ogCache[url]={title,desc:g('og:description')||g('description')||'',img:g('og:image')||'',domain:new URL(url).hostname.replace('www.','')};
-      return ogCache[url];
-    }catch(e){}
-  }
-  // 取得できなくてもドメインだけ返す（最低限のカード表示）
-  try{ogCache[url]={title:new URL(url).hostname.replace('www.',''),desc:'',img:'',domain:new URL(url).hostname.replace('www.','')};}catch(e){}
-  return ogCache[url];
-}
-
-function renderLinks(text,container,showCards=true){
-  const urls=[...new Set(text.match(URL_RE)||[])];
+function renderText(text,container){
   container.innerHTML=esc(text).replace(URL_RE,u=>`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`);
-  if(!showCards||!urls.length)return;
-  urls.forEach(async url=>{
-    const og=await fetchOG(url);
-    if(!og)return;
-    // 既にカードがあればスキップ
-    if(container.querySelector(`[data-og-url]`+`[data-og-url="${CSS.escape(url)}"]`))return;
-    const card=document.createElement('div');
-    card.className='url-card';
-    card.dataset.ogUrl=url;
-    card.onclick=()=>window.open(url,'_blank');
-    card.innerHTML=`${og.img?`<img class="url-card-thumb" src="${esc(og.img)}" onerror="this.style.display='none'" loading="lazy">`:'<div class="url-card-thumb" style="display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--ink-light)">URL</div>'}
-      <div class="url-card-info">
-        <div class="url-card-title">${esc(og.title)}</div>
-        ${og.desc?`<div class="url-card-desc">${esc(og.desc)}</div>`:''}
-        <div class="url-card-domain">${esc(og.domain)}</div>
-      </div>`;
-    // テキスト中のリンク直後に挿入
-    const anchors=container.querySelectorAll('a');
-    let inserted=false;
-    anchors.forEach(a=>{
-      if(!inserted&&(a.href===url||a.textContent===url)){
-        a.after(card);inserted=true;
-      }
-    });
-    if(!inserted)container.appendChild(card);
-  });
 }
 
 // ─── LIST ────────────────────────────────
@@ -605,7 +490,7 @@ function renderList(){
     badge.textContent=`${l.date}（${dowStr(l.date)}）`;item.appendChild(badge);
     const body=document.createElement('div');body.className='log-body';item.appendChild(body);
     const SHORT=140,isLong=l.text.length>SHORT,exp={v:false};
-    function show(full){renderLinks(full?l.text:(isLong?l.text.slice(0,SHORT)+'…':l.text),body,true)}
+    function show(full){renderText(full?l.text:(isLong?l.text.slice(0,SHORT)+'…':l.text),body)}
     show(false);
     if(isLong){
       const btn=document.createElement('button');btn.className='expand-btn';btn.textContent='続きを読む ↓';
