@@ -49,7 +49,18 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
 .cal-nav button{background:none;border:none;cursor:pointer;color:var(--ink-light);font-size:1.1rem;padding:2px 6px;font-family:var(--mono)}
 .cal-nav button:hover{color:var(--ink)}
-.cal-ym{font-family:var(--mono);font-size:.82rem;letter-spacing:.1em;color:var(--ink-mid)}
+.cal-ym{font-family:var(--mono);font-size:.82rem;letter-spacing:.1em;color:var(--ink-mid);cursor:pointer;border-bottom:1px dashed var(--ink-faint);padding-bottom:1px}
+.cal-ym:hover{color:var(--accent)}
+.cal-picker-wrap{position:relative}
+.cal-picker{display:none;position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--paper-card);border:1px solid var(--ink-faint);border-radius:8px;box-shadow:0 4px 20px rgba(26,24,20,.12);z-index:100;width:200px;max-height:280px;overflow-y:auto}
+.cal-picker::-webkit-scrollbar{width:4px}
+.cal-picker::-webkit-scrollbar-thumb{background:var(--ink-faint);border-radius:2px}
+.cal-picker.open{display:block}
+.cal-picker-year{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;color:var(--ink-light);padding:.5rem .85rem .25rem;background:var(--paper-warm);position:sticky;top:0}
+.cal-picker-month{font-family:var(--mono);font-size:.78rem;color:var(--ink);padding:.4rem .85rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.cal-picker-month:hover{background:var(--accent-faint);color:var(--accent)}
+.cal-picker-month.cur{color:var(--accent);font-weight:500}
+.cal-picker-month .has-dot::after{content:'●';font-size:.45rem;color:var(--accent);margin-left:4px;vertical-align:middle}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
 .cal-dow{font-family:var(--mono);font-size:.7rem;text-align:center;color:var(--ink-light);padding:4px 0}
 .cal-day{font-family:var(--mono);font-size:.78rem;text-align:center;padding:6px 2px;border-radius:4px;cursor:pointer;color:var(--ink-light);position:relative;line-height:1.2}
@@ -183,10 +194,13 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
   <!-- LEFT: カレンダー＋エクスポート -->
   <div class="col col-left">
     <div class="col-inner">
-      <div class="cal-nav">
-        <button onclick="calPrev()">‹</button>
-        <span class="cal-ym" id="cal-ym"></span>
-        <button onclick="calNext()">›</button>
+      <div class="cal-picker-wrap">
+        <div class="cal-nav">
+          <button onclick="calPrev()">‹</button>
+          <span class="cal-ym" id="cal-ym" onclick="toggleCalPicker()"></span>
+          <button onclick="calNext()">›</button>
+        </div>
+        <div class="cal-picker" id="cal-picker"></div>
       </div>
       <div class="cal-grid" id="cal-grid"></div>
       <hr class="cal-divider">
@@ -421,8 +435,60 @@ function renderCal(){
 function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--}renderCal()}
 function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++}renderCal()}
 
+function toggleCalPicker(){
+  const picker=document.getElementById('cal-picker');
+  if(picker.classList.contains('open')){picker.classList.remove('open');return}
+  renderCalPicker();
+  picker.classList.add('open');
+}
+
+function renderCalPicker(){
+  const picker=document.getElementById('cal-picker');
+  // 表示範囲：現在の年±10年（将来方向も含む）
+  const today=new Date();
+  const startYear=Math.min(calYear-5, today.getFullYear()-10);
+  const endYear=Math.max(calYear+5, today.getFullYear()+2);
+  const hasDates=new Set(logs.map(l=>l.date.slice(0,7)));
+  const mn=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  let html='';
+  for(let y=endYear;y>=startYear;y--){
+    html+=`<div class="cal-picker-year">${y}年</div>`;
+    for(let m=12;m>=1;m--){
+      const ym=`${y}-${p(m)}`;
+      const isCur=(y===calYear&&m===calMonth+1);
+      const hasDot=hasDates.has(ym);
+      html+=`<div class="cal-picker-month${isCur?' cur':''}" onclick="jumpToMonth(${y},${m-1})">
+        <span>${mn[m-1]}</span>
+        ${hasDot?'<span class="has-dot"></span>':''}
+      </div>`;
+    }
+  }
+  picker.innerHTML=html;
+  // 現在の年月が見えるようスクロール
+  setTimeout(()=>{
+    const cur=picker.querySelector('.cur');
+    if(cur)cur.scrollIntoView({block:'center'});
+  },0);
+}
+
+function jumpToMonth(y,m){
+  calYear=y;calMonth=m;
+  renderCal();
+  document.getElementById('cal-picker').classList.remove('open');
+}
+
+// ピッカー外クリックで閉じる
+document.addEventListener('click',e=>{
+  const wrap=document.querySelector('.cal-picker-wrap');
+  if(wrap&&!wrap.contains(e.target)){
+    document.getElementById('cal-picker').classList.remove('open');
+  }
+});
+
 function selectDay(ds){
   selectedDate=ds;rOffset=0;
+  const[y,m]=ds.split('-').map(Number);
+  calYear=y;calMonth=m-1;
   renderCal();updateHeading();loadEntry(ds);
   renderRight();
   switchView('write');
