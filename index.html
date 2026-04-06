@@ -153,6 +153,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .dialog-overlay{position:fixed;inset:0;background:rgba(26,24,20,.35);display:flex;align-items:center;justify-content:center;z-index:200;display:none}
 .dialog-overlay.show{display:flex}
 .dialog{background:var(--paper-card);border:1px solid var(--ink-faint);border-radius:8px;padding:1.75rem 2rem;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(26,24,20,.12)}
+.dialog.wide{max-width:520px}
 .dialog-title{font-family:var(--mono);font-size:.82rem;letter-spacing:.1em;color:var(--ink);margin-bottom:.8rem}
 .dialog-msg{font-size:.93rem;line-height:1.75;color:var(--ink-mid);margin-bottom:1.35rem;font-family:var(--sans)}
 .dialog-btns{display:flex;gap:8px;justify-content:flex-end}
@@ -241,6 +242,13 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
           <div class="stat-card"><div class="stat-num" id="stat-streak">0</div><div class="stat-lbl">STREAK</div></div>
           <div class="stat-card"><div class="stat-num" id="stat-month">0</div><div class="stat-lbl">MONTH</div></div>
         </div>
+        <div class="sbox">
+          <div class="box-label">全件操作</div>
+          <div class="btn-row" style="margin-top:.5rem;flex-wrap:wrap;gap:8px">
+            <button class="btn" onclick="exportAllMarkdown()">全件をエクスポート</button>
+            <button class="btn" style="color:#c0392b;border-color:#e8b4b0" onclick="deleteAllLogs()">全件を削除する</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -279,12 +287,13 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 
 <!-- インポート確認ダイアログ -->
 <div class="dialog-overlay" id="import-dlg-overlay">
-  <div class="dialog">
+  <div class="dialog wide">
     <div class="dialog-title">日付の重複があります</div>
     <div class="dialog-msg" id="import-dlg-msg"></div>
-    <div class="dialog-btns">
+    <div class="dialog-btns" style="flex-wrap:wrap;gap:6px">
       <button class="btn" id="import-dlg-cancel">キャンセル</button>
       <button class="btn" id="import-dlg-skip">スキップして続ける</button>
+      <button class="btn" id="import-dlg-append">末尾に追記する</button>
       <button class="btn primary" id="import-dlg-overwrite">上書きする</button>
     </div>
   </div>
@@ -657,6 +666,7 @@ async function importExcel(input){
       `<strong>${overlap.length}件</strong>の日付が既存データと重複しています。<br><br>`+
       `<span style="font-family:var(--mono);font-size:.78rem;color:var(--ink-light)">${overlapDates}</span><br><br>`+
       `上書き：既存データをExcelの内容で置き換えます<br>`+
+      `末尾に追記：既存テキストの末尾にExcelの内容を接合します<br>`+
       `スキップ：重複をとばして残りをインポートします<br>`+
       `キャンセル：インポートをやめます`;
 
@@ -667,6 +677,9 @@ async function importExcel(input){
     const cleanup=()=>overlay.classList.remove('show');
     document.getElementById('import-dlg-overwrite').onclick=()=>{
       cleanup();doImport(newEntries,'overwrite',status,input);
+    };
+    document.getElementById('import-dlg-append').onclick=()=>{
+      cleanup();doImport(newEntries,'append',status,input);
     };
     document.getElementById('import-dlg-skip').onclick=()=>{
       cleanup();doImport(newEntries,'skip',status,input);
@@ -684,13 +697,16 @@ async function importExcel(input){
 }
 
 function doImport(entries,mode,status,input){
-  let added=0,updated=0,skipped=0;
+  let added=0,updated=0,appended=0,skipped=0;
   entries.forEach(e=>{
     const idx=logs.findIndex(l=>l.date===e.date);
     if(idx>=0){
       if(mode==='overwrite'){
         logs[idx]={...logs[idx],text:e.text,saved:new Date().toISOString()};
         updated++;
+      }else if(mode==='append'){
+        logs[idx]={...logs[idx],text:logs[idx].text+'\n----\n'+e.text,saved:new Date().toISOString()};
+        appended++;
       }else{
         skipped++;
       }
@@ -703,8 +719,36 @@ function doImport(entries,mode,status,input){
   localStorage.setItem('nippo_v4',JSON.stringify(logs));
   renderCal();renderStats();renderRight();populateExport();
   status.style.color='var(--accent)';
-  status.textContent=`完了：新規${added}件、更新${updated}件${skipped?`、スキップ${skipped}件`:''}`;
+  const parts=[`新規${added}件`];
+  if(updated)parts.push(`上書き${updated}件`);
+  if(appended)parts.push(`追記${appended}件`);
+  if(skipped)parts.push(`スキップ${skipped}件`);
+  status.textContent=`完了：${parts.join('、')}`;
   input.value='';
+}
+
+function exportAllMarkdown(){
+  if(!logs.length){alert('日報がありません。');return}
+  const sorted=[...logs].sort((a,b)=>a.date.localeCompare(b.date));
+  let md=`# 業務日報 全件\n\nエクスポート: ${new Date().toLocaleString('ja-JP')}　全${sorted.length}件\n\n---\n\n`;
+  sorted.forEach(l=>{
+    md+=`## ${l.date}（${dowStr(l.date)}）\n\n${l.text}\n\n---\n\n`;
+  });
+  const blob=new Blob([md],{type:'text/markdown;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`nippo_all_${fmt(_today)}.md`;
+  a.click();URL.revokeObjectURL(a.href);
+}
+
+function deleteAllLogs(){
+  if(!logs.length){alert('日報がありません。');return}
+  if(!confirm(`全${logs.length}件の日報を削除します。\nこの操作は元に戻せません。よろしいですか？`))return;
+  logs=[];
+  localStorage.setItem('nippo_v4',JSON.stringify(logs));
+  renderCal();renderStats();renderRight();populateExport();
+  loadEntry(selectedDate);
+  switchView('stats');
 }
 </script>
 </body>
