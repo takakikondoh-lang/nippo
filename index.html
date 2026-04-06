@@ -175,7 +175,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
     <button class="htab" onclick="requestView('list')">過去の日報</button>
     <button class="htab" onclick="requestView('stats')">ふりかえり</button>
   </div>
-  <span id="hdate"></span>
+  <span id="hdate" onclick="guardDirty(()=>selectDay(todayStr))" style="font-family:var(--mono);font-size:.65rem;letter-spacing:.08em;color:var(--ink-light);cursor:pointer;border-bottom:1px dashed var(--ink-faint)" title="今日に移動"></span>
 </header>
 
 <div class="shell">
