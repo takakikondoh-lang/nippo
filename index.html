@@ -223,7 +223,12 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       </div>
       <div class="write-footer" id="write-footer-inner">
         <span class="unsaved-badge" id="unsaved-badge">● 未保存</span>
-        <span class="char-count" id="char-count">0 文字</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="char-count" id="char-count">0 文字</span>
+          <button id="btn-delete" onclick="deleteEntry()" title="この日の日報を削除"
+            style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--ink-light);font-size:.85rem;line-height:1;display:none"
+            onmouseover="this.style.color='#c0392b'" onmouseout="this.style.color='var(--ink-light)'">🗑</button>
+        </div>
       </div>
     </div>
 
@@ -422,6 +427,9 @@ function getEra(ds){
 function loadEntry(ds){
   const l=logs.find(l=>l.date===ds);
   const isToday=ds===todayStr;
+  // ゴミ箱：保存済みの日報がある場合のみ表示
+  const btn=document.getElementById('btn-delete');
+  if(btn)btn.style.display=l?'inline-block':'none';
   if(isToday){
     // 今日は最初から編集モード
     setEditMode(true, l?l.text:'');
@@ -470,6 +478,19 @@ function setEditMode(editing, text){
 
 function updateCC(){
   document.getElementById('char-count').textContent=`${document.getElementById('entry-text').value.length.toLocaleString()} 文字`;
+}
+
+function deleteEntry(){
+  if(!logs.some(l=>l.date===selectedDate))return;
+  const[y,m,d]=selectedDate.split('-');
+  if(!confirm(`${y}年${+m}月${+d}日の日報を削除します。\nこの操作は元に戻せません。よろしいですか？`))return;
+  logs=logs.filter(l=>l.date!==selectedDate);
+  logs.sort((a,b)=>b.date.localeCompare(a.date));
+  localStorage.setItem('nippo_v4',JSON.stringify(logs));
+  setDirty(false);
+  document.getElementById('btn-delete').style.display='none';
+  renderCal();renderStats();renderRight();populateExport();
+  loadEntry(selectedDate);
 }
 
 // ─── VIEW SWITCH ─────────────────────────
