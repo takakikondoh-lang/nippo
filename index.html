@@ -276,6 +276,19 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
   </div>
 </div>
 
+<!-- インポート確認ダイアログ -->
+<div class="dialog-overlay" id="import-dlg-overlay">
+  <div class="dialog">
+    <div class="dialog-title">日付の重複があります</div>
+    <div class="dialog-msg" id="import-dlg-msg"></div>
+    <div class="dialog-btns">
+      <button class="btn" id="import-dlg-cancel">キャンセル</button>
+      <button class="btn" id="import-dlg-skip">スキップして続ける</button>
+      <button class="btn primary" id="import-dlg-overwrite">上書きする</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── STATE ───────────────────────────────
 let logs=[];
@@ -592,6 +605,7 @@ async function importExcel(input){
   const file=input.files[0];
   if(!file)return;
   const status=document.getElementById('import-status');
+  status.style.color='var(--ink-light)';
   status.textContent='読み込み中…';
   try{
     const buf=await file.arrayBuffer();
@@ -609,7 +623,7 @@ async function importExcel(input){
       return fmt(d);
     };
 
-    // ヘッダー行スキップ（1行目が日付でなければスキップ）
+    // 1行目がヘッダーならスキップ
     let startRow=0;
     if(rows.length&&!toDateStr(rows[0][0]))startRow=1;
 
@@ -622,37 +636,74 @@ async function importExcel(input){
       newEntries.push({date:ds,text});
     }
 
-    if(!newEntries.length){status.style.color='var(--red,#c0392b)';status.textContent='有効なデータが見つかりませんでした。';input.value='';return}
-
-    // 重複チェック
-    const overlap=newEntries.filter(e=>logs.some(l=>l.date===e.date));
-    let proceed=true;
-    if(overlap.length){
-      proceed=confirm(`${overlap.length}件の日付が既存データと重複しています。\n重複分を上書きしてインポートしますか？\n\nキャンセルすると重複分をスキップします。`);
+    if(!newEntries.length){
+      status.style.color='#c0392b';
+      status.textContent='有効なデータが見つかりませんでした。';
+      input.value='';return;
     }
 
-    let added=0,updated=0,skipped=0;
-    newEntries.forEach(e=>{
-      const idx=logs.findIndex(l=>l.date===e.date);
-      if(idx>=0){
-        if(proceed){logs[idx]={...logs[idx],text:e.text,saved:new Date().toISOString()};updated++}
-        else{skipped++}
-      }else{
-        logs.unshift({date:e.date,text:e.text,saved:new Date().toISOString()});added++;
-      }
-    });
-    logs.sort((a,b)=>b.date.localeCompare(a.date));
-    localStorage.setItem('nippo_v4',JSON.stringify(logs));
+    const overlap=newEntries.filter(e=>logs.some(l=>l.date===e.date));
 
-    renderCal();renderStats();renderRight();populateExport();
-    status.style.color='var(--accent)';
-    status.textContent=`完了：新規${added}件、更新${updated}件${skipped?`、スキップ${skipped}件`:''}`;
-    input.value='';
+    // 重複なし → そのままインポート
+    if(!overlap.length){
+      doImport(newEntries,'overwrite',status,input);
+      return;
+    }
+
+    // 重複あり → カスタムダイアログ
+    const overlapDates=overlap.slice(0,15).map(e=>e.date).join('、')+(overlap.length>15?`…他${overlap.length-15}件`:'');
+    document.getElementById('import-dlg-msg').innerHTML=
+      `<strong>${overlap.length}件</strong>の日付が既存データと重複しています。<br><br>`+
+      `<span style="font-family:var(--mono);font-size:.78rem;color:var(--ink-light)">${overlapDates}</span><br><br>`+
+      `上書き：既存データをExcelの内容で置き換えます<br>`+
+      `スキップ：重複をとばして残りをインポートします<br>`+
+      `キャンセル：インポートをやめます`;
+
+    const overlay=document.getElementById('import-dlg-overlay');
+    overlay.classList.add('show');
+
+    // 各ボタンのハンドラを一度だけ設定
+    const cleanup=()=>overlay.classList.remove('show');
+    document.getElementById('import-dlg-overwrite').onclick=()=>{
+      cleanup();doImport(newEntries,'overwrite',status,input);
+    };
+    document.getElementById('import-dlg-skip').onclick=()=>{
+      cleanup();doImport(newEntries,'skip',status,input);
+    };
+    document.getElementById('import-dlg-cancel').onclick=()=>{
+      cleanup();
+      status.textContent='インポートをキャンセルしました。';
+      input.value='';
+    };
   }catch(e){
-    status.style.color='var(--red,#c0392b)';
+    status.style.color='#c0392b';
     status.textContent='エラー: '+e.message;
     input.value='';
   }
+}
+
+function doImport(entries,mode,status,input){
+  let added=0,updated=0,skipped=0;
+  entries.forEach(e=>{
+    const idx=logs.findIndex(l=>l.date===e.date);
+    if(idx>=0){
+      if(mode==='overwrite'){
+        logs[idx]={...logs[idx],text:e.text,saved:new Date().toISOString()};
+        updated++;
+      }else{
+        skipped++;
+      }
+    }else{
+      logs.unshift({date:e.date,text:e.text,saved:new Date().toISOString()});
+      added++;
+    }
+  });
+  logs.sort((a,b)=>b.date.localeCompare(a.date));
+  localStorage.setItem('nippo_v4',JSON.stringify(logs));
+  renderCal();renderStats();renderRight();populateExport();
+  status.style.color='var(--accent)';
+  status.textContent=`完了：新規${added}件、更新${updated}件${skipped?`、スキップ${skipped}件`:''}`;
+  input.value='';
 }
 </script>
 </body>
