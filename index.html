@@ -121,6 +121,8 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .bm-star:hover{color:var(--accent)}
 .bm-star.on{color:var(--accent)}
 .bm-star.on svg path{fill:currentColor}
+.list-btn{font-family:var(--mono);font-size:.68rem;padding:3px 8px;background:none;border:1px solid var(--accent-light);border-radius:3px;color:var(--ink-light);cursor:pointer;letter-spacing:.03em;transition:all .15s}
+.list-btn:hover{border-color:var(--accent);color:var(--ink)}
 .bm-panel{display:flex;flex-direction:column;height:100%}
 .bm-body{flex:1;overflow-y:auto;padding:1rem 1.75rem}
 .bm-body::-webkit-scrollbar{width:4px}
@@ -251,6 +253,10 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
           </div>
         </div>
         <div class="btn-row" id="write-btns">
+          <button class="list-btn" onclick="insertList('bullet')" title="箇条書きリストにする">・リスト</button>
+          <button class="list-btn" onclick="insertList('number')" title="番号付きリストにする">1. リスト</button>
+          <button class="list-btn" onclick="insertDivider()" title="区切り線を挿入">──</button>
+          <span style="display:inline-block;width:8px"></span>
           <button id="bm-star-btn" class="bm-star" onclick="toggleBookmark()" title="ブックマークする">
             <svg id="bm-icon" width="18" height="22" viewBox="0 0 18 22" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M2 2h14v18l-7-5-7 5V2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -264,8 +270,8 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <textarea id="entry-text" placeholder="今日の作業・気づき・課題など自由に記述…"></textarea>
       </div>
       <div class="write-footer" id="write-footer-inner">
-        <span class="unsaved-badge" id="unsaved-badge">● 未保存</span>
         <div style="display:flex;align-items:center;gap:10px">
+          <span class="unsaved-badge" id="unsaved-badge">● 未保存</span>
           <span class="char-count" id="char-count">0 文字</span>
           <button id="btn-delete" onclick="deleteEntry()" title="この日の日報を削除"
             style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--ink-light);font-size:.85rem;line-height:1;display:none"
@@ -628,7 +634,36 @@ function switchView(name){
   if(name==='bookmark')renderBookmarks();
 }
 
-// ─── BOOKMARK ────────────────────────────
+// ─── LIST INSERT ─────────────────────────
+function insertList(type){
+  const ta=document.getElementById('entry-text');
+  const start=ta.selectionStart;
+  const end=ta.selectionEnd;
+  const val=ta.value;
+  const selected=val.slice(start,end);
+  if(!selected)return;
+  const lines=selected.split('\n');
+  const replaced=lines.map((line,i)=>{
+    if(!line.trim())return line; // 空行はそのまま
+    return type==='bullet'?`・${line}`:`${i+1}. ${line}`;
+  }).join('\n');
+  ta.value=val.slice(0,start)+replaced+val.slice(end);
+  ta.selectionStart=start;
+  ta.selectionEnd=start+replaced.length;
+  ta.focus();
+  setDirty(true);updateCC();
+}
+function insertDivider(){
+  const ta=document.getElementById('entry-text');
+  const pos=ta.selectionStart;
+  const val=ta.value;
+  const divider='────────────────\n';
+  ta.value=val.slice(0,pos)+divider+val.slice(pos);
+  const newPos=pos+divider.length;
+  ta.selectionStart=ta.selectionEnd=newPos;
+  ta.focus();
+  setDirty(true);updateCC();
+}
 function toggleBookmark(){
   if(bookmarks.has(selectedDate)){
     bookmarks.delete(selectedDate);
