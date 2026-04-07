@@ -116,6 +116,19 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 
 .highlight{background:var(--accent-faint);border-radius:2px;padding:0 2px}
 
+/* BOOKMARK */
+.bm-star{background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;padding:0 0 0 6px;color:var(--ink-faint);transition:color .15s;flex-shrink:0}
+.bm-star.on{color:#c8a830}
+.bm-star:hover{color:#c8a830}
+.bm-panel{display:flex;flex-direction:column;height:100%}
+.bm-body{flex:1;overflow-y:auto;padding:1rem 1.75rem}
+.bm-body::-webkit-scrollbar{width:4px}
+.bm-body::-webkit-scrollbar-thumb{background:var(--ink-faint);border-radius:2px}
+.bm-item{padding:.9rem 0;border-bottom:1px solid var(--rule);cursor:pointer}
+.bm-item:last-child{border-bottom:none}
+.bm-item:hover .log-date-badge{text-decoration:underline}
+.bm-preview{font-size:.87rem;line-height:1.7;color:var(--ink-mid);white-space:pre-wrap;word-break:break-word;font-family:var(--sans);margin-top:.3rem;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+
 /* STATS VIEW */
 .stats-panel{display:flex;flex-direction:column;height:100%}
 .stats-body{flex:1;overflow-y:auto;padding:1.4rem 1.75rem}
@@ -185,6 +198,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
     <button class="htab active" onclick="requestView('write')">記録する</button>
     <button class="htab" onclick="requestView('list')">過去の日報</button>
     <button class="htab" onclick="requestView('stats')">ふりかえり</button>
+    <button class="htab" onclick="requestView('bookmark')">ブックマーク</button>
   </div>
   <span id="hdate" onclick="guardDirty(()=>selectDay(todayStr))" style="font-family:var(--mono);font-size:.65rem;letter-spacing:.08em;color:var(--ink-light);cursor:pointer;border-bottom:1px dashed var(--ink-faint)" title="今日に移動"></span>
 </header>
@@ -220,7 +234,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <span class="btn" style="display:block;text-align:center;width:100%">ファイルを選択</span>
       </label>
       <div id="import-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.5rem;line-height:1.6"></div>
-      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-07 17:21</div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-07 23:12</div>
     </div>
   </div>
 
@@ -234,6 +248,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
             <div class="date-main" id="write-heading-main"></div>
             <div class="date-sub" id="write-heading-sub"></div>
           </div>
+          <button id="bm-star-btn" class="bm-star" onclick="toggleBookmark()" title="ブックマーク">☆</button>
         </div>
         <div class="btn-row" id="write-btns">
           <button class="btn primary" id="btn-save" onclick="saveEntry()">保存</button>
@@ -293,6 +308,10 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       </div>
     </div>
 
+    <div id="vbookmark" class="bm-panel" style="display:none">
+      <div class="bm-body" id="bm-list"></div>
+    </div>
+
   </div>
 
   <!-- RIGHT PREVIEW: 前日・翌日 -->
@@ -343,6 +362,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 <script>
 // ─── STATE ───────────────────────────────
 let logs=[];
+let bookmarks=new Set(); // ブックマーク済み日付のSet
 let calYear,calMonth,selectedDate;
 let rOffset=0;
 let isDirty=false;       // 未保存フラグ
@@ -361,6 +381,8 @@ function diffLabel(n){if(n===0)return'選択日';if(n===-1)return'前日';if(n==
 // ─── INIT ─────────────────────────────────
 function init(){
   try{logs=JSON.parse(localStorage.getItem('nippo_v4')||'[]')}catch(e){logs=[]}
+  // ブックマーク読み込み
+  try{bookmarks=new Set(JSON.parse(localStorage.getItem('nippo_bookmarks')||'[]'))}catch(e){bookmarks=new Set()}
   // 旧バージョンのデータを移行（nippo_v2 / nippo_v3）
   if(!logs.length){
     for(const oldKey of['nippo_v3','nippo_v2']){
@@ -499,6 +521,7 @@ function updateHeading(){
   const dow=dowStr(selectedDate);
   document.getElementById('write-heading-main').textContent=`${y}年${+m}月${+d}日（${dow}）`;
   document.getElementById('write-heading-sub').textContent=getEra(selectedDate);
+  updateStarBtn();
 }
 
 function getEra(ds){
@@ -590,12 +613,49 @@ function requestView(name){
   }
 }
 function switchView(name){
-  document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',['write','list','stats'][i]===name));
+  document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',['write','list','stats','bookmark'][i]===name));
   document.getElementById('vwrite').style.display=name==='write'?'flex':'none';
   document.getElementById('vlist').style.display=name==='list'?'flex':'none';
   document.getElementById('vstats').style.display=name==='stats'?'flex':'none';
+  document.getElementById('vbookmark').style.display=name==='bookmark'?'flex':'none';
   if(name==='list')renderList();
   if(name==='stats'){renderStats();populateExport()}
+  if(name==='bookmark')renderBookmarks();
+}
+
+// ─── BOOKMARK ────────────────────────────
+function toggleBookmark(){
+  if(bookmarks.has(selectedDate)){
+    bookmarks.delete(selectedDate);
+  }else{
+    bookmarks.add(selectedDate);
+  }
+  localStorage.setItem('nippo_bookmarks',JSON.stringify([...bookmarks]));
+  updateStarBtn();
+}
+function updateStarBtn(){
+  const btn=document.getElementById('bm-star-btn');
+  if(!btn)return;
+  const on=bookmarks.has(selectedDate);
+  btn.textContent=on?'★':'☆';
+  btn.classList.toggle('on',on);
+}
+function renderBookmarks(){
+  const el=document.getElementById('bm-list');
+  const items=logs.filter(l=>bookmarks.has(l.date)).sort((a,b)=>b.date.localeCompare(a.date));
+  if(!items.length){
+    el.innerHTML='<div style="padding:2rem;font-family:var(--mono);font-size:.82rem;color:var(--ink-light);text-align:center">ブックマークはありません</div>';
+    return;
+  }
+  el.innerHTML=items.map(l=>{
+    const[y,m,d]=l.date.split('-');
+    const dow=dowStr(l.date);
+    const preview=esc(l.text).replace(/\n/g,' ');
+    return`<div class="bm-item" onclick="guardDirty(()=>{switchView('write');selectDay('${l.date}')})">
+      <div class="log-date-badge">${y}年${+m}月${+d}日（${dow}）</div>
+      <div class="bm-preview">${preview}</div>
+    </div>`;
+  }).join('');
 }
 
 // ─── SAVE ────────────────────────────────
