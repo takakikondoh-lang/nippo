@@ -220,6 +220,13 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <span class="btn" style="display:block;text-align:center;width:100%">ファイルを選択</span>
       </label>
       <div id="import-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.5rem;line-height:1.6"></div>
+      <hr class="cal-divider">
+      <div class="box-label">BACKUP — GAS</div>
+      <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:6px">
+        <button class="btn primary" style="width:100%;justify-content:center" onclick="gasBackup()">差分をバックアップ</button>
+        <button class="btn" style="width:100%;justify-content:center" onclick="gasFullBackup()">全件バックアップ</button>
+        <div id="gas-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);line-height:1.6"></div>
+      </div>
     </div>
   </div>
 
@@ -376,6 +383,8 @@ function init(){
   setupDialog();
   renderCal();updateHeading();loadEntry(selectedDate);
   renderRight();renderStats();populateExport();
+  // 起動時に自動バックアップ（サイレント）
+  gasBackup(true);
 }
 
 // ─── DIRTY / DIALOG ──────────────────────
@@ -618,6 +627,68 @@ function _doSave(){
   logs.sort((a,b)=>b.date.localeCompare(a.date));
   localStorage.setItem('nippo_v4',JSON.stringify(logs));
   setDirty(false);
+  // 保存のたびに自動バックアップ（サイレント）
+  gasBackup(true);
+}
+
+// ─── GAS BACKUP ──────────────────────────
+const GAS_URL='https://script.google.com/macros/s/AKfycbzxaZ3IwTOch4eftR9l2G-bTYHxoF6yEat9ljWpE53TRP5DfASySyoBZiuRM8WKC3CRbg/exec';
+const BACKUP_KEY='nippo_last_backup';
+
+async function gasBackup(silent=false){
+  const el=document.getElementById('gas-status');
+  if(!logs.length){
+    if(!silent){el.style.color='var(--ink-light)';el.textContent='日報がありません。'}
+    return;
+  }
+
+  // 差分：前回バックアップ以降に saved が更新されたものだけ抽出
+  const lastBackup=localStorage.getItem(BACKUP_KEY)||'';
+  const diff=logs.filter(l=>(l.saved||'')>lastBackup);
+
+  if(!diff.length){
+    if(!silent){el.style.color='var(--ink-light)';el.textContent='差分なし。最新の状態です。'}
+    return;
+  }
+
+  if(!silent){el.style.color='var(--ink-light)';el.innerHTML=`<span class="spinner"></span>${diff.length}件を同期中…`;}
+  try{
+    const res=await fetch(GAS_URL,{
+      method:'POST',
+      body:JSON.stringify({action:'upsert',logs:diff.map(l=>({date:l.date,text:l.text,saved:l.saved||''}))})
+    });
+    const data=await res.json();
+    if(data.status==='ok'){
+      // 成功したらバックアップ日時を更新
+      localStorage.setItem(BACKUP_KEY,new Date().toISOString());
+      if(!silent){el.style.color='var(--accent)';el.textContent=data.message;}
+    }else{
+      if(!silent){el.style.color='#c0392b';el.textContent='エラー: '+data.message;}
+    }
+  }catch(e){
+    if(!silent){el.style.color='#c0392b';el.textContent='エラー: '+e.message;}
+  }
+}
+
+async function gasFullBackup(){
+  const el=document.getElementById('gas-status');
+  if(!logs.length){el.style.color='var(--ink-light)';el.textContent='日報がありません。';return}
+  el.style.color='var(--ink-light)';el.innerHTML=`<span class="spinner"></span>全${logs.length}件をバックアップ中…`;
+  try{
+    const res=await fetch(GAS_URL,{
+      method:'POST',
+      body:JSON.stringify({action:'full',logs:logs.map(l=>({date:l.date,text:l.text,saved:l.saved||''}))})
+    });
+    const data=await res.json();
+    if(data.status==='ok'){
+      localStorage.setItem(BACKUP_KEY,new Date().toISOString());
+      el.style.color='var(--accent)';el.textContent=data.message;
+    }else{
+      el.style.color='#c0392b';el.textContent='エラー: '+data.message;
+    }
+  }catch(e){
+    el.style.color='#c0392b';el.textContent='エラー: '+e.message;
+  }
 }
 
 // ─── RIGHT PREVIEW ───────────────────────
