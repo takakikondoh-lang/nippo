@@ -641,30 +641,21 @@ async function gasBackup(silent=false){
     if(!silent){el.style.color='var(--ink-light)';el.textContent='日報がありません。'}
     return;
   }
-
-  // 差分：前回バックアップ以降に saved が更新されたものだけ抽出
   const lastBackup=localStorage.getItem(BACKUP_KEY)||'';
   const diff=logs.filter(l=>(l.saved||'')>lastBackup);
-
   if(!diff.length){
     if(!silent){el.style.color='var(--ink-light)';el.textContent='差分なし。最新の状態です。'}
     return;
   }
-
   if(!silent){el.style.color='var(--ink-light)';el.innerHTML=`<span class="spinner"></span>${diff.length}件を同期中…`;}
   try{
-    const res=await fetch(GAS_URL,{
+    await fetch(GAS_URL,{
       method:'POST',
+      mode:'no-cors',
       body:JSON.stringify({action:'upsert',logs:diff.map(l=>({date:l.date,text:l.text,saved:l.saved||''}))})
     });
-    const data=await res.json();
-    if(data.status==='ok'){
-      // 成功したらバックアップ日時を更新
-      localStorage.setItem(BACKUP_KEY,new Date().toISOString());
-      if(!silent){el.style.color='var(--accent)';el.textContent=data.message;}
-    }else{
-      if(!silent){el.style.color='#c0392b';el.textContent='エラー: '+data.message;}
-    }
+    localStorage.setItem(BACKUP_KEY,new Date().toISOString());
+    if(!silent){el.style.color='var(--accent)';el.textContent=`${diff.length}件を送信しました。`;}
   }catch(e){
     if(!silent){el.style.color='#c0392b';el.textContent='エラー: '+e.message;}
   }
@@ -673,19 +664,15 @@ async function gasBackup(silent=false){
 async function gasFullBackup(){
   const el=document.getElementById('gas-status');
   if(!logs.length){el.style.color='var(--ink-light)';el.textContent='日報がありません。';return}
-  el.style.color='var(--ink-light)';el.innerHTML=`<span class="spinner"></span>全${logs.length}件をバックアップ中…`;
+  el.style.color='var(--ink-light)';el.innerHTML=`<span class="spinner"></span>全${logs.length}件を送信中…`;
   try{
-    const res=await fetch(GAS_URL,{
+    await fetch(GAS_URL,{
       method:'POST',
+      mode:'no-cors',
       body:JSON.stringify({action:'full',logs:logs.map(l=>({date:l.date,text:l.text,saved:l.saved||''}))})
     });
-    const data=await res.json();
-    if(data.status==='ok'){
-      localStorage.setItem(BACKUP_KEY,new Date().toISOString());
-      el.style.color='var(--accent)';el.textContent=data.message;
-    }else{
-      el.style.color='#c0392b';el.textContent='エラー: '+data.message;
-    }
+    localStorage.setItem(BACKUP_KEY,new Date().toISOString());
+    el.style.color='var(--accent)';el.textContent=`全${logs.length}件を送信しました。`;
   }catch(e){
     el.style.color='#c0392b';el.textContent='エラー: '+e.message;
   }
