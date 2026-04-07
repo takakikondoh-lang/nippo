@@ -227,6 +227,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <button class="btn" style="width:100%;justify-content:center" onclick="gasFullBackup()">全件バックアップ</button>
         <div id="gas-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);line-height:1.6"></div>
       </div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-07 17:21</div>
     </div>
   </div>
 
@@ -648,17 +649,20 @@ async function gasBackup(silent=false){
     return;
   }
   if(!silent){el.style.color='var(--ink-light)';el.innerHTML=`<span class="spinner"></span>${diff.length}件を同期中…`;}
-  try{
-    await fetch(GAS_URL,{
-      method:'POST',
-      mode:'no-cors',
-      body:JSON.stringify({action:'upsert',logs:diff.map(l=>({date:l.date,text:l.text,saved:l.saved||''}))})
-    });
-    localStorage.setItem(BACKUP_KEY,new Date().toISOString());
-    if(!silent){el.style.color='var(--accent)';el.textContent=`${diff.length}件を送信しました。`;}
-  }catch(e){
-    if(!silent){el.style.color='#c0392b';el.textContent='エラー: '+e.message;}
+  let ok=0;
+  for(const l of diff){
+    try{
+      const url=GAS_URL
+        +'?action=upsert'
+        +'&date='+encodeURIComponent(l.date)
+        +'&text='+encodeURIComponent(l.text)
+        +'&saved='+encodeURIComponent(l.saved||'');
+      await fetch(url,{mode:'no-cors'});
+      ok++;
+    }catch(e){/* サイレント */}
   }
+  localStorage.setItem(BACKUP_KEY,new Date().toISOString());
+  if(!silent){el.style.color='var(--accent)';el.textContent=`${ok}件を送信しました。`;}
 }
 
 async function gasFullBackup(){
