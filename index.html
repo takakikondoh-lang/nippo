@@ -225,6 +225,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:6px">
         <button class="btn primary" style="width:100%;justify-content:center" onclick="gasBackup()">差分をバックアップ</button>
         <button class="btn" style="width:100%;justify-content:center" onclick="gasFullBackup()">全件バックアップ</button>
+        <button class="btn" style="width:100%;justify-content:center;font-size:.7rem;color:var(--ink-light)" onclick="resetBackupKey()">履歴をリセット（全件再送）</button>
         <div id="gas-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);line-height:1.6"></div>
       </div>
       <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-07 17:21</div>
@@ -665,7 +666,13 @@ async function gasBackup(silent=false){
   if(!silent){el.style.color='var(--accent)';el.textContent=`${ok}件を送信しました。`;}
 }
 
-async function gasFullBackup(){
+function resetBackupKey(){
+  if(!confirm('バックアップ履歴をリセットします。\n次回「差分をバックアップ」を押すと全件が送信されます。'))return;
+  localStorage.removeItem(BACKUP_KEY);
+  const el=document.getElementById('gas-status');
+  el.style.color='var(--ink-light)';
+  el.textContent='履歴をリセットしました。差分バックアップで全件送信されます。';
+}
   const el=document.getElementById('gas-status');
   if(!logs.length){el.style.color='var(--ink-light)';el.textContent='日報がありません。';return}
   el.style.color='var(--ink-light)';el.innerHTML=`<span class="spinner"></span>全${logs.length}件を送信中…`;
