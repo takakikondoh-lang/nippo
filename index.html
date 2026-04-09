@@ -237,7 +237,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <span class="btn" style="display:block;text-align:center;width:100%">ファイルを選択</span>
       </label>
       <div id="import-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.5rem;line-height:1.6"></div>
-      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-08 20:43</div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-09 17:19</div>
     </div>
   </div>
 
@@ -710,11 +710,7 @@ function saveEntry(){
   if(!text){alert('内容を入力してください。');return}
   _doSave();
   renderCal();renderStats();renderRight();populateExport();
-  // 今日以外はプレビューモードに戻す
-  if(selectedDate!==todayStr){
-    setEditMode(false, text);
-  }
-  switchView('list');
+  setEditMode(false, text);
 }
 function _doSave(){
   const text=document.getElementById('entry-text').value.trim();
@@ -749,7 +745,8 @@ function renderSlot(id,ds,diff){
   const body=document.createElement('div');
   body.className='rslot-body'+(log?'':' empty');
   if(log){
-    body.innerHTML=esc(log.text).replace(URL_RE,u=>`<a href="${esc(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(u)}</a>`);
+    renderText(log.text, body);
+    body.querySelectorAll('a').forEach(a=>a.addEventListener('click',e=>e.stopPropagation()));
   }else{
     body.textContent='（記録なし）';
   }
@@ -762,7 +759,37 @@ function renderSlot(id,ds,diff){
 const URL_RE=/https?:\/\/[^\s\u3000\u300c\u300d\uff08\uff09\u3001\u3002\uff0c\uff0e"'<>()\[\]]+/g;
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function renderText(text,container){
-  container.innerHTML=esc(text).replace(URL_RE,u=>`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`);
+  const lines=text.split('\n');
+  const html=lines.map(line=>{
+    const e=esc(line);
+    // 見出し h1〜h3
+    const hm=e.match(/^(#{1,3})\s+(.+)/);
+    if(hm){
+      const lv=hm[1].length;
+      const sz=['1.15rem','1rem','.9rem'][lv-1];
+      const mt=lv===1?'1.1rem':'.7rem';
+      return `<div style="font-weight:500;font-size:${sz};color:var(--ink);margin-top:${mt};margin-bottom:.2rem;line-height:1.5">${applyInline(hm[2])}</div>`;
+    }
+    // 引用
+    if(e.match(/^&gt;\s*/)){
+      const inner=e.replace(/^&gt;\s*/,'');
+      return `<div style="border-left:3px solid var(--accent-light);padding-left:.75rem;color:var(--ink-mid);margin:.2rem 0">${applyInline(inner)}</div>`;
+    }
+    // 区切り線
+    if(line.match(/^[─━ー]{4,}$/)){
+      return `<hr style="border:none;border-top:1px solid var(--rule);margin:.6rem 0">`;
+    }
+    // 通常行（空行は改行）
+    return e.trim()===''?'<br>':'<div style="min-height:1.2em">'+applyInline(e)+'</div>';
+  }).join('');
+  container.innerHTML=html;
+}
+function applyInline(s){
+  // URLリンク
+  s=s.replace(URL_RE,u=>`<a href="${u}" target="_blank" rel="noopener" style="color:var(--accent)">${u}</a>`);
+  // **太字**
+  s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  return s;
 }
 
 // ─── LIST ────────────────────────────────
