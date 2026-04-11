@@ -86,8 +86,11 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 #entry-preview a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 .write-footer{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:.65rem 1.75rem;border-top:1px solid var(--rule)}
 .char-count{font-family:var(--mono);font-size:.73rem;color:var(--ink-light)}
-.unsaved-badge{font-family:var(--mono);font-size:.7rem;color:var(--accent);opacity:0;transition:opacity .2s}
+.unsaved-badge{font-family:var(--mono);font-size:.7rem;color:var(--accent);opacity:0;transition:opacity .25s}
 .unsaved-badge.show{opacity:1}
+.unsaved-badge.draft{color:var(--ink-light)}
+.unsaved-badge.saving{color:var(--ink-light);animation:badge-pulse .6s ease-in-out}
+@keyframes badge-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 /* LIST VIEW */
 .list-panel{display:flex;flex-direction:column;height:100%}
 .list-search{flex-shrink:0;padding:1rem 1.75rem .85rem;border-bottom:1px solid var(--rule);position:relative}
@@ -246,7 +249,15 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <span class="btn" style="display:block;text-align:center;width:100%">ファイルを選択</span>
       </label>
       <div id="import-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.5rem;line-height:1.6"></div>
-      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-09 17:28</div>
+      <hr class="cal-divider">
+      <div class="box-label">RESTORE — JSON</div>
+      <div style="margin-top:.5rem;font-family:var(--mono);font-size:.62rem;color:var(--ink-light);line-height:1.6;margin-bottom:.6rem">nippo_backup_*.json<br>nippo_all_*.json</div>
+      <label style="display:block;cursor:pointer">
+        <input type="file" id="restore-file" accept=".json" style="display:none" onchange="importJSON(this)">
+        <span class="btn" style="display:block;text-align:center;width:100%">ファイルを選択</span>
+      </label>
+      <div id="restore-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.5rem;line-height:1.6"></div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-11</div>
     </div>
   </div>
 
@@ -292,7 +303,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <textarea id="entry-text" placeholder="今日の作業・気づき・課題など自由に記述…"></textarea>
       </div>
       <div class="write-footer" id="write-footer-inner">
-        <span class="unsaved-badge" id="unsaved-badge">● 未保存</span>
+        <span class="unsaved-badge" id="unsaved-badge"></span>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="char-count" id="char-count">0 文字</span>
           <button id="btn-delete" onclick="deleteEntry()" title="この日の日報を削除"
@@ -334,7 +345,8 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
         <div class="sbox">
           <div class="box-label">全件操作</div>
           <div class="btn-row" style="margin-top:.5rem;flex-wrap:wrap;gap:8px">
-            <button class="btn" onclick="exportAllMarkdown()">全件をエクスポート</button>
+            <button class="btn" onclick="exportAllMarkdown()">全件 MD</button>
+            <button class="btn" onclick="exportAllJSON()">全件 JSON</button>
             <button class="btn" style="color:#c0392b;border-color:#e8b4b0" onclick="deleteAllLogs()">全件を削除する</button>
           </div>
         </div>
@@ -433,6 +445,33 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
   </div>
 </div>
 
+<!-- 全件削除：第1確認ダイアログ -->
+<div class="dialog-overlay" id="del-all-dlg1">
+  <div class="dialog">
+    <div class="dialog-title">⚠ 全件削除</div>
+    <div class="dialog-msg" id="del-all-msg1"></div>
+    <div class="dialog-btns">
+      <button class="btn" id="del-all-cancel1">キャンセル</button>
+      <button class="btn" style="color:#c0392b;border-color:#e8b4b0" id="del-all-next">次へ進む →</button>
+    </div>
+  </div>
+</div>
+
+<!-- 全件削除：第2確認ダイアログ（バックアップ付き） -->
+<div class="dialog-overlay" id="del-all-dlg2">
+  <div class="dialog">
+    <div class="dialog-title">本当に削除しますか？</div>
+    <div class="dialog-msg" id="del-all-msg2"></div>
+    <div class="dialog-btns" style="flex-direction:column;align-items:stretch;gap:8px">
+      <button class="btn primary" id="del-all-backup-then-delete" style="justify-content:center">バックアップして削除する</button>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" id="del-all-cancel2">キャンセル</button>
+        <button class="btn" style="color:#c0392b;border-color:#e8b4b0" id="del-all-execute">バックアップせず削除する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── STATE ───────────────────────────────
 let logs=[];
@@ -441,6 +480,9 @@ let calYear,calMonth,selectedDate;
 let rOffset=0;
 let isDirty=false;       // 未保存フラグ
 let pendingAction=null;  // ダイアログ後に実行する関数
+let _autoSaveTimer=null; // 自動下書きタイマー
+const DRAFT_KEY='nippo_draft'; // 下書き保存キー
+const AUTO_SAVE_INTERVAL=10000; // 10秒
 
 // タイムゾーン安全な「今日」取得。getFullYear/Month/Date はローカル時刻なので正確。
 function getTodayStr(){
@@ -484,7 +526,72 @@ function init(){
 // ─── DIRTY / DIALOG ──────────────────────
 function setDirty(v){
   isDirty=v;
-  document.getElementById('unsaved-badge').classList.toggle('show',v);
+  const badge=document.getElementById('unsaved-badge');
+  if(v){
+    badge.textContent='● 未保存';
+    badge.className='unsaved-badge show';
+    // 入力があるたびにタイマーをリセット
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer=setTimeout(autoSaveDraft,AUTO_SAVE_INTERVAL);
+  } else {
+    // 本保存時：下書きを削除してバッジを消す
+    clearTimeout(_autoSaveTimer);
+    clearDraft();
+    badge.className='unsaved-badge';
+    badge.textContent='';
+  }
+}
+
+// ─── AUTO DRAFT SAVE ─────────────────────
+function autoSaveDraft(){
+  const ta=document.getElementById('entry-text');
+  if(ta.style.display==='none') return; // 閲覧モードなら何もしない
+  const text=ta.value;
+  if(!text.trim()) return;
+  if(!isDirty) return; // 本保存済みなら不要
+  const badge=document.getElementById('unsaved-badge');
+  badge.textContent='保存中…';
+  badge.className='unsaved-badge show saving';
+  // 1フレーム遅らせてUIに反映させてから保存
+  requestAnimationFrame(()=>{
+    const draft={date:selectedDate,text,savedAt:new Date().toISOString()};
+    try{
+      localStorage.setItem(DRAFT_KEY,JSON.stringify(draft));
+      const t=new Date();
+      const hhmm=`${p(t.getHours())}:${p(t.getMinutes())}`;
+      badge.textContent=`◎ 下書き保存 ${hhmm}`;
+      badge.className='unsaved-badge show draft';
+    }catch(e){
+      badge.textContent='● 未保存';
+      badge.className='unsaved-badge show';
+    }
+  });
+}
+
+function clearDraft(){
+  try{localStorage.removeItem(DRAFT_KEY)}catch(e){}
+}
+
+// 起動時に下書きが残っていれば復元確認
+function checkDraftOnLoad(ds){
+  let draft=null;
+  try{draft=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null')}catch(e){}
+  if(!draft||draft.date!==ds)return;
+  // 本保存済みの内容と同じなら下書きは不要
+  const saved=logs.find(l=>l.date===ds);
+  if(saved&&saved.text===draft.text){clearDraft();return;}
+  const t=new Date(draft.savedAt);
+  const hhmm=`${p(t.getHours())}:${p(t.getMinutes())}`;
+  const msg=`${ds} の下書きが見つかりました（${hhmm} 自動保存）。
+復元しますか？`;
+  if(confirm(msg)){
+    const ta=document.getElementById('entry-text');
+    ta.value=draft.text;
+    setDirty(true);
+    updateCC();
+  } else {
+    clearDraft();
+  }
 }
 
 function guardDirty(action){
@@ -510,9 +617,14 @@ function setupDialog(){
     document.getElementById('dlg-overlay').classList.remove('show');
     if(pendingAction){pendingAction();pendingAction=null}
   };
-  // beforeunload
+  // beforeunload：未保存 or 下書きのみの状態で離脱しようとしたら警告
   window.addEventListener('beforeunload',e=>{
-    if(isDirty){e.preventDefault();e.returnValue=''}
+    if(isDirty){
+      // 下書き保存済みならブラウザ警告は不要（データは保護されている）
+      const badge=document.getElementById('unsaved-badge');
+      if(badge&&badge.classList.contains('draft')) return;
+      e.preventDefault();e.returnValue='';
+    }
   });
 }
 
@@ -626,6 +738,8 @@ function loadEntry(ds){
     setEditMode(false, l.text);
   } else {
     setEditMode(true, '');
+    // 記録がない日のみ下書き復元を確認（記録ありなら不要）
+    checkDraftOnLoad(ds);
   }
   setDirty(false);
 }
@@ -1325,6 +1439,79 @@ async function unzipAll(buf){
   }
   return files;
 }
+// ─── JSON RESTORE ────────────────────────
+async function importJSON(input){
+  const file=input.files[0];
+  if(!file)return;
+  const status=document.getElementById('restore-status');
+  status.style.color='var(--ink-light)';
+  status.textContent='読み込み中…';
+  try{
+    const text=await file.text();
+    let payload;
+    try{payload=JSON.parse(text)}
+    catch(e){throw new Error('JSONの解析に失敗しました。ファイルが壊れている可能性があります。')}
+
+    // フォーマット検証
+    if(payload.version!=='nippo_v4')
+      throw new Error(`非対応のバージョンです（version: ${payload.version??'不明'}）`);
+    if(!Array.isArray(payload.logs)||payload.logs.length===0)
+      throw new Error('ログデータが空です。');
+
+    // logs 配列の各エントリを検証・正規化
+    const entries=payload.logs.reduce((acc,l)=>{
+      if(!l.date||typeof l.text!=='string')return acc; // 不正エントリはスキップ
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(l.date))return acc;
+      acc.push({date:l.date,text:l.text.trim()});
+      return acc;
+    },[]);
+
+    if(!entries.length)
+      throw new Error('有効なエントリが見つかりませんでした。');
+
+    const exportedAt=payload.exportedAt
+      ? new Date(payload.exportedAt).toLocaleString('ja-JP')
+      : '不明';
+
+    const overlap=entries.filter(e=>logs.some(l=>l.date===e.date));
+
+    // 重複なし → そのまま復元
+    if(!overlap.length){
+      doImport(entries,'overwrite',status,null);
+      input.value='';
+      return;
+    }
+
+    // 重複あり → 既存の重複ダイアログを流用
+    const overlapDates=overlap.slice(0,15).map(e=>e.date).join('、')
+      +(overlap.length>15?`…他${overlap.length-15}件`:'');
+    document.getElementById('import-dlg-msg').innerHTML=
+      `<strong>${entries.length} 件</strong>を復元しようとしています`+
+      `（バックアップ: ${exportedAt}）。<br><br>`+
+      `うち <strong>${overlap.length} 件</strong>が既存データと重複しています。<br><br>`+
+      `<span style="font-family:var(--mono);font-size:.78rem;color:var(--ink-light)">${overlapDates}</span><br><br>`+
+      `上書き：既存データをバックアップの内容で置き換えます<br>`+
+      `末尾に追記：既存テキストの末尾にバックアップの内容を接合します<br>`+
+      `スキップ：重複をとばして残りを復元します<br>`+
+      `キャンセル：復元をやめます`;
+
+    const overlay=document.getElementById('import-dlg-overlay');
+    overlay.classList.add('show');
+    const cleanup=()=>{overlay.classList.remove('show');input.value=''};
+    document.getElementById('import-dlg-overwrite').onclick=()=>{cleanup();doImport(entries,'overwrite',status,null)};
+    document.getElementById('import-dlg-append').onclick  =()=>{cleanup();doImport(entries,'append',  status,null)};
+    document.getElementById('import-dlg-skip').onclick    =()=>{cleanup();doImport(entries,'skip',    status,null)};
+    document.getElementById('import-dlg-cancel').onclick  =()=>{
+      cleanup();
+      status.textContent='復元をキャンセルしました。';
+    };
+  }catch(e){
+    status.style.color='#c0392b';
+    status.textContent='エラー: '+e.message;
+    input.value='';
+  }
+}
+
 function doImport(entries,mode,status,input){
   let added=0,updated=0,appended=0,skipped=0;
   entries.forEach(e=>{
@@ -1353,7 +1540,7 @@ function doImport(entries,mode,status,input){
   if(appended)parts.push(`追記${appended}件`);
   if(skipped)parts.push(`スキップ${skipped}件`);
   status.textContent=`完了：${parts.join('、')}`;
-  input.value='';
+  if(input)input.value='';
 }
 
 function exportAllMarkdown(){
@@ -1366,15 +1553,98 @@ function exportAllMarkdown(){
   const blob=new Blob([md],{type:'text/markdown;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`nippo_all_${fmt(_today)}.md`;
+  a.download=`nippo_all_${getTodayStr()}.md`;
   a.click();URL.revokeObjectURL(a.href);
 }
 
+function exportAllJSON(){
+  if(!logs.length){alert('日報がありません。');return}
+  const payload={
+    version:'nippo_v4',
+    exportedAt:new Date().toISOString(),
+    count:logs.length,
+    logs:[...logs].sort((a,b)=>a.date.localeCompare(b.date))
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`nippo_all_${getTodayStr()}.json`;
+  a.click();URL.revokeObjectURL(a.href);
+}
+
+// ─── 全件削除（二段階確認＋自動バックアップ） ────
 function deleteAllLogs(){
   if(!logs.length){alert('日報がありません。');return}
-  if(!confirm(`全${logs.length}件の日報を削除します。\nこの操作は元に戻せません。よろしいですか？`))return;
+
+  // ── 第1ダイアログ：件数・期間・警告を提示 ──
+  const sorted=[...logs].sort((a,b)=>a.date.localeCompare(b.date));
+  const oldest=sorted[0].date;
+  const newest=sorted[sorted.length-1].date;
+  document.getElementById('del-all-msg1').innerHTML=
+    `全 <strong>${logs.length} 件</strong> の日報を削除しようとしています。<br><br>`+
+    `<span style="font-family:var(--mono);font-size:.8rem;color:var(--ink-light)">`+
+    `期間: ${oldest} 〜 ${newest}</span><br><br>`+
+    `この操作は<strong>元に戻せません</strong>。<br>`+
+    `次の画面でバックアップを取得してから削除することを推奨します。`;
+  const dlg1=document.getElementById('del-all-dlg1');
+  dlg1.classList.add('show');
+
+  document.getElementById('del-all-cancel1').onclick=()=>{
+    dlg1.classList.remove('show');
+  };
+  document.getElementById('del-all-next').onclick=()=>{
+    dlg1.classList.remove('show');
+    _showDeleteConfirm2();
+  };
+}
+
+function _showDeleteConfirm2(){
+  // ── 第2ダイアログ：最終確認＋バックアップ選択 ──
+  const now=new Date().toLocaleString('ja-JP');
+  document.getElementById('del-all-msg2').innerHTML=
+    `削除前に JSON バックアップファイルをダウンロードします。<br>`+
+    `バックアップがあれば、将来的に復元できます。<br><br>`+
+    `<span style="font-family:var(--mono);font-size:.78rem;color:var(--ink-light)">`+
+    `${now}　${logs.length} 件</span>`;
+  const dlg2=document.getElementById('del-all-dlg2');
+  dlg2.classList.add('show');
+
+  document.getElementById('del-all-cancel2').onclick=()=>{
+    dlg2.classList.remove('show');
+  };
+  document.getElementById('del-all-backup-then-delete').onclick=()=>{
+    dlg2.classList.remove('show');
+    _backupLogsAsJSON();
+    // ダウンロード開始後すこし待ってから削除（ブラウザのDL処理を妨げない）
+    setTimeout(()=>_executeDeleteAll(), 400);
+  };
+  document.getElementById('del-all-execute').onclick=()=>{
+    dlg2.classList.remove('show');
+    _executeDeleteAll();
+  };
+}
+
+function _backupLogsAsJSON(){
+  const payload={
+    version:'nippo_v4',
+    exportedAt:new Date().toISOString(),
+    count:logs.length,
+    logs:[...logs].sort((a,b)=>a.date.localeCompare(b.date))
+  };
+  const json=JSON.stringify(payload,null,2);
+  const blob=new Blob([json],{type:'application/json;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const stamp=getTodayStr().replace(/-/g,'');
+  a.download=`nippo_backup_${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function _executeDeleteAll(){
   logs=[];
   localStorage.setItem('nippo_v4',JSON.stringify(logs));
+  clearDraft();
   renderCal();renderStats();renderRight();populateExport();
   loadEntry(selectedDate);
   switchView('stats');
