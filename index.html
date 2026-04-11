@@ -442,8 +442,14 @@ let rOffset=0;
 let isDirty=false;       // 未保存フラグ
 let pendingAction=null;  // ダイアログ後に実行する関数
 
-const _today=new Date();_today.setHours(0,0,0,0);
-const todayStr=fmt(_today);
+// タイムゾーン安全な「今日」取得。getFullYear/Month/Date はローカル時刻なので正確。
+function getTodayStr(){
+  const d=new Date();
+  return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+// _today / todayStr は後方互換のため残すが、都度 getTodayStr() を参照する
+const todayStr=getTodayStr();
+const _today=(()=>{const d=new Date();d.setHours(0,0,0,0);return d})();
 
 function fmt(d){return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
 function p(n){return String(n).padStart(2,'0')}
@@ -523,7 +529,7 @@ function renderCal(){
     const ds=`${yr}-${p(mo+1)}-${p(d)}`;
     let c='cal-day';
     if(has.has(ds))c+=' has';
-    if(ds===todayStr)c+=' today';
+    if(ds===getTodayStr())c+=' today';
     if(ds===selectedDate)c+=' sel';
     h+=`<div class="${c}" onclick="guardDirty(()=>selectDay('${ds}'))">${d}</div>`;
   }
@@ -611,16 +617,15 @@ function getEra(ds){
 }
 function loadEntry(ds){
   const l=logs.find(l=>l.date===ds);
-  const isToday=ds===todayStr;
   // ゴミ箱：保存済みの日報がある場合のみ表示
   const btn=document.getElementById('btn-delete');
   if(btn)btn.style.display=l?'inline-block':'none';
-  if(isToday){
-    // 今日は最初から編集モード
-    setEditMode(true, l?l.text:'');
+  // 記録がある → 閲覧モード（編集ボタンで切替）
+  // 記録がない → 編集モード（すぐ書き始められる）
+  if(l){
+    setEditMode(false, l.text);
   } else {
-    // 今日以外はプレビューモード
-    setEditMode(false, l?l.text:'');
+    setEditMode(true, '');
   }
   setDirty(false);
 }
@@ -1080,10 +1085,10 @@ function highlightInDOM(root, terms){
 // ─── STATS ───────────────────────────────
 function renderStats(){
   document.getElementById('stat-total').textContent=logs.length;
-  const ym=todayStr.slice(0,7);
+  const ym=getTodayStr().slice(0,7);
   document.getElementById('stat-month').textContent=logs.filter(l=>l.date.startsWith(ym)).length;
   let st=0;
-  for(let i=0;i<365;i++){const d=new Date(_today);d.setDate(d.getDate()-i);if(logs.some(l=>l.date===fmt(d)))st++;else break}
+  for(let i=0;i<365;i++){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-i);if(logs.some(l=>l.date===fmt(d)))st++;else break}
   document.getElementById('stat-streak').textContent=st;
 }
 
