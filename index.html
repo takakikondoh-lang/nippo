@@ -40,7 +40,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .col-rinfo{border-left:1px solid var(--rule);background:var(--paper-card)}
 
 /* SCROLL */
-.col-inner{flex:1;overflow-y:auto;padding:1.25rem 1.1rem}
+.col-inner{flex:1;overflow-y:auto;padding:1.25rem 1.1rem;display:flex;flex-direction:column}
 .col-inner::-webkit-scrollbar{width:4px}
 .col-inner::-webkit-scrollbar-thumb{background:var(--ink-faint);border-radius:2px}
 
@@ -196,6 +196,16 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* UNSAVED DIALOG */
+/* バックアップ催促トースト */
+.backup-toast{position:fixed;top:-80px;left:50%;transform:translateX(-50%);z-index:300;background:var(--paper-card);border:1px solid var(--accent-light);border-radius:8px;box-shadow:0 4px 20px rgba(26,24,20,.14);padding:.75rem 1rem;display:flex;align-items:center;gap:12px;min-width:320px;max-width:480px;transition:top .35s cubic-bezier(.22,.68,0,1.2)}
+.backup-toast.show{top:14px}
+.backup-toast-icon{font-size:1.1rem;flex-shrink:0}
+.backup-toast-body{flex:1;font-family:var(--sans);font-size:.85rem;color:var(--ink);line-height:1.5}
+.backup-toast-sub{font-family:var(--mono);font-size:.7rem;color:var(--ink-light);margin-top:2px}
+.backup-toast-btn{font-family:var(--mono);font-size:.72rem;padding:5px 10px;background:var(--accent);border:none;border-radius:4px;color:#fff;cursor:pointer;flex-shrink:0;white-space:nowrap}
+.backup-toast-btn:hover{background:#7a5f38}
+.backup-toast-close{background:none;border:none;cursor:pointer;color:var(--ink-light);font-size:1rem;padding:2px 4px;flex-shrink:0;line-height:1}
+.backup-toast-close:hover{color:var(--ink)}
 .dialog-overlay{position:fixed;inset:0;background:rgba(26,24,20,.35);display:flex;align-items:center;justify-content:center;z-index:200;display:none}
 .dialog-overlay.show{display:flex}
 .dialog{background:var(--paper-card);border:1px solid var(--ink-faint);border-radius:8px;padding:1.75rem 2rem;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(26,24,20,.12)}
@@ -212,8 +222,8 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
   <div class="header-tabs">
     <button class="htab active" onclick="requestView('write')">記録する</button>
     <button class="htab" onclick="requestView('list')">過去の日報</button>
-    <button class="htab" onclick="requestView('stats')">ふりかえり</button>
     <button class="htab" onclick="requestView('bookmark')">ブックマーク</button>
+    <button class="htab" onclick="requestView('stats')">機能</button>
   </div>
   <span id="hdate" onclick="guardDirty(()=>selectDay(todayStr))" style="font-family:var(--mono);font-size:.65rem;letter-spacing:.08em;color:var(--ink-light);cursor:pointer;border-bottom:1px dashed var(--ink-faint)" title="今日に移動"></span>
 </header>
@@ -234,30 +244,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       <div class="cal-grid" id="cal-grid"></div>
       <hr class="cal-divider">
       <div class="cal-legend">● 記録あり</div>
-      <hr class="cal-divider">
-      <div class="box-label">EXPORT — MD</div>
-      <div style="display:flex;flex-direction:column;gap:6px;margin-top:.5rem">
-        <select id="export-year" style="width:100%"></select>
-        <select id="export-month" style="width:100%"></select>
-        <button class="btn primary" style="width:100%;justify-content:center" onclick="exportMarkdown()">ダウンロード</button>
-      </div>
-      <hr class="cal-divider">
-      <div class="box-label">IMPORT — XLSX</div>
-      <div style="margin-top:.5rem;font-family:var(--mono);font-size:.62rem;color:var(--ink-light);line-height:1.6;margin-bottom:.6rem">A列:日付　B列:本文</div>
-      <label style="display:block;cursor:pointer">
-        <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)">
-        <span class="btn" style="display:block;text-align:center;width:100%">ファイルを選択</span>
-      </label>
-      <div id="import-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.5rem;line-height:1.6"></div>
-      <hr class="cal-divider">
-      <div class="box-label">RESTORE — JSON</div>
-      <div style="margin-top:.5rem;font-family:var(--mono);font-size:.62rem;color:var(--ink-light);line-height:1.6;margin-bottom:.6rem">nippo_backup_*.json<br>nippo_all_*.json</div>
-      <label style="display:block;cursor:pointer">
-        <input type="file" id="restore-file" accept=".json" style="display:none" onchange="importJSON(this)">
-        <span class="btn" style="display:block;text-align:center;width:100%">ファイルを選択</span>
-      </label>
-      <div id="restore-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.5rem;line-height:1.6"></div>
-      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-mid);margin-top:1.5rem;text-align:center">v2026-04-11</div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-faint);margin-top:auto;padding-top:1.5rem;text-align:center">v2026-04-11</div>
     </div>
   </div>
 
@@ -342,11 +329,59 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
           <div class="stat-card"><div class="stat-num" id="stat-streak">0</div><div class="stat-lbl">連続日数</div></div>
           <div class="stat-card"><div class="stat-num" id="stat-month">0</div><div class="stat-lbl">今月の記録</div></div>
         </div>
+
+        <!-- エクスポート -->
+        <div class="sbox">
+          <div class="box-label">EXPORT</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:.75rem">
+            <div>
+              <div style="font-family:var(--mono);font-size:.68rem;color:var(--ink-light);margin-bottom:.5rem">月別 Markdown</div>
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <select id="export-year" style="font-family:var(--mono);font-size:.75rem;padding:5px 8px;background:var(--paper);border:1px solid var(--ink-faint);border-radius:var(--r);color:var(--ink);outline:none"></select>
+                <select id="export-month" style="font-family:var(--mono);font-size:.75rem;padding:5px 8px;background:var(--paper);border:1px solid var(--ink-faint);border-radius:var(--r);color:var(--ink);outline:none"></select>
+                <button class="btn primary" style="justify-content:center" onclick="exportMarkdown()">ダウンロード</button>
+              </div>
+            </div>
+            <div>
+              <div style="font-family:var(--mono);font-size:.68rem;color:var(--ink-light);margin-bottom:.5rem">全件</div>
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <button class="btn" style="justify-content:center" onclick="exportAllMarkdown()">Markdown形式で全件エクスポート</button>
+                <button class="btn" style="justify-content:center" onclick="exportAllJSON()">JSON形式で全件エクスポート</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- インポート -->
+        <div class="sbox">
+          <div class="box-label">IMPORT / RESTORE</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:.75rem">
+            <div>
+              <div style="font-family:var(--mono);font-size:.68rem;color:var(--ink-light);margin-bottom:.3rem">from Excel (.xlsx)</div>
+              <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-faint);margin-bottom:.5rem">A列:日付　B列:本文</div>
+              <label style="display:block;cursor:pointer">
+                <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)">
+                <span class="btn" style="display:block;text-align:center">ファイルを選択</span>
+              </label>
+              <div id="import-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.4rem;line-height:1.6"></div>
+            </div>
+            <div>
+              <div style="font-family:var(--mono);font-size:.68rem;color:var(--ink-light);margin-bottom:.3rem">from JSON バックアップ</div>
+              <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-faint);margin-bottom:.5rem">nippo_backup_*.json</div>
+              <label style="display:block;cursor:pointer">
+                <input type="file" id="restore-file" accept=".json" style="display:none" onchange="importJSON(this)">
+                <span class="btn" style="display:block;text-align:center">ファイルを選択</span>
+              </label>
+              <div id="restore-status" style="font-family:var(--mono);font-size:.65rem;color:var(--ink-light);margin-top:.4rem;line-height:1.6"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 全件操作 -->
         <div class="sbox">
           <div class="box-label">全件操作</div>
+          <div id="last-backup-row" style="font-family:var(--mono);font-size:.7rem;color:var(--ink-light);margin-top:.5rem;line-height:1.8"></div>
           <div class="btn-row" style="margin-top:.5rem;flex-wrap:wrap;gap:8px">
-            <button class="btn" onclick="exportAllMarkdown()">全件 MD</button>
-            <button class="btn" onclick="exportAllJSON()">全件 JSON</button>
             <button class="btn" style="color:#c0392b;border-color:#e8b4b0" onclick="deleteAllLogs()">全件を削除する</button>
           </div>
         </div>
@@ -418,6 +453,17 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 
 </div>
 
+<!-- バックアップ催促トースト -->
+<div class="backup-toast" id="backup-toast">
+  <span class="backup-toast-icon">🗂</span>
+  <div class="backup-toast-body">
+    <div id="backup-toast-msg">バックアップを取っていません</div>
+    <div class="backup-toast-sub" id="backup-toast-sub"></div>
+  </div>
+  <button class="backup-toast-btn" onclick="toastDoBackup()">今すぐバックアップ</button>
+  <button class="backup-toast-close" onclick="dismissToast()" title="閉じる">✕</button>
+</div>
+
 <!-- 未保存ダイアログ -->
 <div class="dialog-overlay" id="dlg-overlay">
   <div class="dialog">
@@ -483,6 +529,9 @@ let pendingAction=null;  // ダイアログ後に実行する関数
 let _autoSaveTimer=null; // 自動下書きタイマー
 const DRAFT_KEY='nippo_draft'; // 下書き保存キー
 const AUTO_SAVE_INTERVAL=10000; // 10秒
+const BACKUP_KEY='nippo_last_backup'; // 最終バックアップ記録キー
+const BACKUP_WARN_DAYS=7;  // 何日バックアップなしで通知するか
+const BACKUP_WARN_MIN_ENTRIES=1; // その間に何件以上の記録がある場合に通知するか
 
 // タイムゾーン安全な「今日」取得。getFullYear/Month/Date はローカル時刻なので正確。
 function getTodayStr(){
@@ -501,6 +550,80 @@ function dowStr(s){const[y,m,d]=s.split('-');return['日','月','火','水','木
 function diffLabel(n){if(n===0)return'選択日';if(n===-1)return'前日';if(n===1)return'翌日';return n<0?`${Math.abs(n)}日前`:`${n}日後`}
 
 // ─── INIT ─────────────────────────────────
+// ─── BACKUP TRACKING ─────────────────────
+function recordBackupNow(){
+  const rec={date:getTodayStr(),ts:new Date().toISOString()};
+  try{localStorage.setItem(BACKUP_KEY,JSON.stringify(rec))}catch(e){}
+  renderLastBackup();
+  dismissToast();
+}
+
+function getLastBackup(){
+  try{return JSON.parse(localStorage.getItem(BACKUP_KEY)||'null')}catch(e){return null}
+}
+
+function renderLastBackup(){
+  const el=document.getElementById('last-backup-row');
+  if(!el)return;
+  const rec=getLastBackup();
+  if(!rec){
+    el.innerHTML='前回バックアップ: <span style="color:var(--accent)">なし</span>';
+  } else {
+    const days=daysSince(rec.date);
+    const label=days===0?'今日':days===1?'昨日':`${days}日前`;
+    const warn=days>=BACKUP_WARN_DAYS?` <span style="color:var(--accent)">⚠</span>`:'';
+    el.innerHTML=`前回バックアップ: <span style="color:var(--ink)">${rec.date}（${label}）</span>${warn}`;
+  }
+}
+
+function daysSince(dateStr){
+  const d=new Date(dateStr);d.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return Math.floor((today-d)/(1000*60*60*24));
+}
+
+// 起動時バックアップ催促チェック
+const TOAST_SUPPRESS_KEY='nippo_last_toast'; // トースト抑制タイムスタンプ
+const TOAST_SUPPRESS_MS=24*60*60*1000;       // 24時間は再表示しない
+
+function checkBackupWarning(){
+  if(!logs.length)return;
+
+  // バックアップ条件チェック
+  const rec=getLastBackup();
+  const days=rec?daysSince(rec.date):999;
+  if(days<BACKUP_WARN_DAYS)return;
+  const sinceDate=rec?rec.date:'0000-00-00';
+  const newEntries=logs.filter(l=>l.date>sinceDate).length;
+  if(newEntries<BACKUP_WARN_MIN_ENTRIES)return;
+
+  // 24時間以内にすでに表示済みなら抑制
+  try{
+    const lastTs=localStorage.getItem(TOAST_SUPPRESS_KEY);
+    if(lastTs&&(Date.now()-Number(lastTs))<TOAST_SUPPRESS_MS)return;
+  }catch(e){}
+
+  // トースト表示
+  const daysLabel=rec
+    ?`前回バックアップから ${days} 日・${newEntries} 件の記録が未保護です`
+    :`バックアップが見つかりません・${newEntries} 件の記録が未保護です`;
+  document.getElementById('backup-toast-msg').textContent='バックアップを推奨します';
+  document.getElementById('backup-toast-sub').textContent=daysLabel;
+  setTimeout(()=>document.getElementById('backup-toast').classList.add('show'),800);
+}
+
+function dismissToast(){
+  document.getElementById('backup-toast').classList.remove('show');
+  // 閉じた時刻を記録して24時間抑制
+  try{localStorage.setItem(TOAST_SUPPRESS_KEY,String(Date.now()))}catch(e){}
+}
+
+function toastDoBackup(){
+  dismissToast();
+  _backupLogsAsJSON();
+  recordBackupNow();
+}
+
 function init(){
   try{logs=JSON.parse(localStorage.getItem('nippo_v4')||'[]')}catch(e){logs=[]}
   // ブックマーク読み込み
@@ -521,6 +644,15 @@ function init(){
   setupDialog();
   renderCal();updateHeading();loadEntry(selectedDate);
   renderRight();renderStats();populateExport();
+  renderLastBackup();
+  checkBackupWarning();
+
+  // タブが非表示→表示に戻ったときに再チェック（タブ固定運用対応）
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'){
+      checkBackupWarning();
+    }
+  });
 }
 
 // ─── DIRTY / DIALOG ──────────────────────
@@ -812,7 +944,7 @@ function requestView(name){
   }
 }
 function switchView(name){
-  document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',['write','list','stats','bookmark'][i]===name));
+  document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',['write','list','bookmark','stats'][i]===name));
   document.getElementById('vwrite').style.display=name==='write'?'flex':'none';
   document.getElementById('vlist').style.display=name==='list'?'flex':'none';
   document.getElementById('vstats').style.display=name==='stats'?'flex':'none';
@@ -1199,6 +1331,7 @@ function highlightInDOM(root, terms){
 // ─── STATS ───────────────────────────────
 function renderStats(){
   document.getElementById('stat-total').textContent=logs.length;
+  renderLastBackup();
   const ym=getTodayStr().slice(0,7);
   document.getElementById('stat-month').textContent=logs.filter(l=>l.date.startsWith(ym)).length;
   let st=0;
@@ -1570,6 +1703,7 @@ function exportAllJSON(){
   a.href=URL.createObjectURL(blob);
   a.download=`nippo_all_${getTodayStr()}.json`;
   a.click();URL.revokeObjectURL(a.href);
+  recordBackupNow();
 }
 
 // ─── 全件削除（二段階確認＋自動バックアップ） ────
@@ -1639,6 +1773,7 @@ function _backupLogsAsJSON(){
   a.download=`nippo_backup_${stamp}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
+  recordBackupNow();
 }
 
 function _executeDeleteAll(){
