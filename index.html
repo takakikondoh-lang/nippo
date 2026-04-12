@@ -214,6 +214,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 .dialog-msg{font-size:.93rem;line-height:1.75;color:var(--ink-mid);margin-bottom:1.35rem;font-family:var(--sans)}
 .dialog-btns{display:flex;gap:8px;justify-content:flex-end}
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -244,7 +245,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       <div class="cal-grid" id="cal-grid"></div>
       <hr class="cal-divider">
       <div class="cal-legend">● 記録あり</div>
-      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-light);margin-top:auto;padding-top:1.5rem;text-align:center">2026-04-12-Lp5kQz2J</div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-light);margin-top:auto;padding-top:1.5rem;text-align:center">2026-04-12-Hx7nBq3W</div>
     </div>
   </div>
 
@@ -493,7 +494,12 @@ let _autoSaveTimer=null; // 自動下書きタイマー
 const DRAFT_KEY='nippo_draft'; // 下書き保存キー
 const AUTO_SAVE_INTERVAL=10000; // 10秒
 const BACKUP_KEY='nippo_last_backup'; // 最終バックアップ記録キー
-const SUMMARY_GAS_URL='https://script.google.com/macros/s/AKfycbyz20HVKeYQOJMMMgmXEbmbjYnE5QkK38e9Ij887VNqmV8KwYECOfLRutwMbuqTq9IX8A/exec'; // ← GASのデプロイURLをここに貼る
+
+// ─── OAuth / サマリー設定 ────────────────────────────
+const GCAL_CLIENT_ID='503377575059-qs56i6jolds19soudogiq4p2j5pjeo6c.apps.googleusercontent.com';
+const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly';
+const CLAUDE_API_KEY=''; // ← Anthropic APIキーをここに貼る
+let googleToken=null;
 const BACKUP_WARN_DAYS=7;  // 何日バックアップなしで通知するか
 const BACKUP_WARN_MIN_ENTRIES=1; // その間に何件以上の記録がある場合に通知するか
 
@@ -1057,28 +1063,116 @@ function renderBookmarks(){
 }
 
 // ─── SUMMARY ─────────────────────────────
+function googleSignIn(){
+  return new Promise((resolve,reject)=>{
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:GCAL_CLIENT_ID,
+      scope:GCAL_SCOPE,
+      callback:(resp)=>{
+        if(resp.error){reject(resp.error);return;}
+        googleToken=resp.access_token;
+        resolve(resp.access_token);
+      }
+    });
+    client.requestAccessToken();
+  });
+}
+
+async function fetchCalendarEvents(dateStr){
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const timeMin=new Date(y,m-1,d,0,0,0).toISOString();
+  const timeMax=new Date(y,m-1,d,23,59,59).toISOString();
+  const url=`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`;
+  const res=await fetch(url,{headers:{Authorization:'Bearer '+googleToken}});
+  const data=await res.json();
+  if(!data.items||data.items.length===0) return['予定なし'];
+  return data.items.map(ev=>{
+    const start=ev.start.dateTime?ev.start.dateTime.slice(11,16):ev.start.date;
+    const end=ev.end.dateTime?ev.end.dateTime.slice(11,16):'';
+    return`${start}${end?'〜'+end:''} ${ev.summary||'（タイトルなし）'}`;
+  });
+}
+
+async function fetchGmailThreads(dateStr){
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const after=`${y}/${m}/${d}`;
+  const before=`${y}/${m}/${d+1}`;
+  const query=encodeURIComponent(`after:${after} before:${before}`);
+  const res=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads?q=${query}&maxResults=30`,{
+    headers:{Authorization:'Bearer '+googleToken}
+  });
+  const data=await res.json();
+  if(!data.threads||data.threads.length===0) return['メールのやりとりなし'];
+  const items=await Promise.all(data.threads.slice(0,10).map(async t=>{
+    const r=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${t.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,{
+      headers:{Authorization:'Bearer '+googleToken}
+    });
+    const td=await r.json();
+    const msg=td.messages?.[0];
+    const subject=msg?.payload?.headers?.find(h=>h.name==='Subject')?.value||'（件名なし）';
+    const from=(msg?.payload?.headers?.find(h=>h.name==='From')?.value||'').replace(/<.*>/,'').trim();
+    return`・${subject}（${from}）`;
+  }));
+  return items;
+}
+
+async function callClaudeAPI(dateStr,events,mails){
+  if(!CLAUDE_API_KEY) throw new Error('CLAUDE_API_KEY が設定されていません');
+  const prompt=`以下は${dateStr}の予定とメールのやりとりです。
+これをもとに、業務日報の冒頭に挿入する簡潔なサマリーを作成してください。
+
+【本日の予定】
+${events.join('\n')}
+
+【メールのやりとり】
+${mails.join('\n')}
+
+出力形式：
+- 箇条書き（・）で3〜6行程度
+- 事実ベースで簡潔に
+- 余計な前置きや説明文は不要。箇条書きのみ出力すること`;
+
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':CLAUDE_API_KEY,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:1000,
+      messages:[{role:'user',content:prompt}]
+    })
+  });
+  const data=await res.json();
+  if(data.error) throw new Error(data.error.message);
+  return data.content[0].text;
+}
+
 async function generateSummary(){
-  if(!SUMMARY_GAS_URL){
-    alert('GASのデプロイURLが設定されていません。\nindex.html内の SUMMARY_GAS_URL に設定してください。');
+  if(!CLAUDE_API_KEY){
+    alert('CLAUDE_API_KEY が設定されていません。\nindex.html内の CLAUDE_API_KEY に設定してください。');
     return;
   }
   const btn=document.getElementById('btn-summary');
   btn.disabled=true;
-  btn.textContent='取得中…';
+  btn.textContent='認証中…';
   try{
-    const res=await fetch(SUMMARY_GAS_URL,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'generateSummary',date:selectedDate,token:'tkm-2026-kondoh',origin:window.location.origin})
-    });
-    const data=await res.json();
-    if(!data.ok) throw new Error(data.error||'不明なエラー');
+    if(!googleToken) await googleSignIn();
+    btn.textContent='取得中…';
+    const events=await fetchCalendarEvents(selectedDate);
+    const mails=await fetchGmailThreads(selectedDate);
+    btn.textContent='生成中…';
+    const summary=await callClaudeAPI(selectedDate,events,mails);
     const ta=document.getElementById('entry-text');
     const current=ta.value;
-    ta.value=data.summary+(current?'\n\n────────\n\n'+current:'');
+    ta.value=summary+(current?'\n\n────────\n\n'+current:'');
     ta.focus();
     setDirty(true);
   }catch(err){
+    googleToken=null;
     alert('サマリーの取得に失敗しました：\n'+err.message);
   }finally{
     btn.disabled=false;
