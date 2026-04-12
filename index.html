@@ -35,8 +35,11 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
 /* SHELL — 3カラム */
 .shell{flex:1;display:grid;grid-template-columns:220px 1fr 440px;min-height:0;overflow:hidden}
 .col{overflow:hidden;display:flex;flex-direction:column}
-.col-left{border-right:1px solid var(--rule);background:var(--paper-card)}
-.col-rpreview{border-left:1px solid var(--rule);background:var(--paper-card)}
+.col-left{border-right:1px solid var(--rule);background:var(--paper-card);transition:background .3s,color .3s}
+.col-rpreview{border-left:1px solid var(--rule);background:var(--paper-card);transition:background .3s,color .3s}
+.shell.editing .col-left,.shell.editing .col-rpreview{background:#c8c2b8;pointer-events:none}
+.shell.editing .col-left *,.shell.editing .col-rpreview *{color:#9e9890!important;transition:color .3s}
+.shell.editing .rslot{background:#c0bab0!important;border-color:#b0aaa0!important}
 .col-rinfo{border-left:1px solid var(--rule);background:var(--paper-card)}
 
 /* SCROLL */
@@ -245,7 +248,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       <div class="cal-grid" id="cal-grid"></div>
       <hr class="cal-divider">
       <div class="cal-legend">● 記録あり</div>
-      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-light);margin-top:auto;padding-top:1.5rem;text-align:center">2026-04-12-Hx7nBq3W</div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-light);margin-top:auto;padding-top:1.5rem;text-align:center">2026-04-13-Rx2mKp9L</div>
     </div>
   </div>
 
@@ -274,9 +277,9 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
               <hr class="fmt-sep">
               <button class="fmt-item" onclick="fmtApply('bullet')"><span class="fmt-item-icon">・</span><span class="fmt-item-label">箇条書きリスト</span></button>
               <button class="fmt-item" onclick="fmtApply('number')"><span class="fmt-item-icon">1.</span><span class="fmt-item-label">番号付きリスト</span></button>
-              <button class="fmt-item" onclick="fmtApply('divider')"><span class="fmt-item-icon">──</span><span class="fmt-item-label">区切り線</span></button>
             </div>
           </div>
+          <button class="fmt-btn" onclick="fmtApply('divider')" title="区切り線を挿入">──</button>
           <span style="display:inline-block;width:4px"></span>
           <button id="btn-summary" class="btn" onclick="generateSummary()" title="今日の予定・メールからサマリーを生成">✦ サマリー</button>
           <button id="bm-star-btn" class="bm-star" onclick="toggleBookmark()" title="ブックマークする">
@@ -851,6 +854,7 @@ function setEditMode(editing, text){
   const pv=document.getElementById('entry-preview');
   const btnSave=document.getElementById('btn-save');
   const footer=document.getElementById('write-footer-inner');
+  document.querySelector('.shell').classList.toggle('editing', editing);
 
   if(editing){
     ta.style.display='flex';
