@@ -244,7 +244,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       <div class="cal-grid" id="cal-grid"></div>
       <hr class="cal-divider">
       <div class="cal-legend">● 記録あり</div>
-      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-light);margin-top:auto;padding-top:1.5rem;text-align:center">2026-04-12-mR9nWx4T</div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-light);margin-top:auto;padding-top:1.5rem;text-align:center">2026-04-12-Lp5kQz2J</div>
     </div>
   </div>
 
@@ -1069,7 +1069,7 @@ async function generateSummary(){
     const res=await fetch(SUMMARY_GAS_URL,{
       method:'POST',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'generateSummary',date:selectedDate})
+      body:JSON.stringify({action:'generateSummary',date:selectedDate,token:'tkm-2026-kondoh',origin:window.location.origin})
     });
     const data=await res.json();
     if(!data.ok) throw new Error(data.error||'不明なエラー');
