@@ -244,7 +244,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
       <div class="cal-grid" id="cal-grid"></div>
       <hr class="cal-divider">
       <div class="cal-legend">● 記録あり</div>
-      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-light);margin-top:auto;padding-top:1.5rem;text-align:center">2026-04-11-k7mX3pQn</div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--ink-light);margin-top:auto;padding-top:1.5rem;text-align:center">2026-04-12-mR9nWx4T</div>
     </div>
   </div>
 
@@ -277,6 +277,7 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
             </div>
           </div>
           <span style="display:inline-block;width:4px"></span>
+          <button id="btn-summary" class="btn" onclick="generateSummary()" title="今日の予定・メールからサマリーを生成">✦ サマリー</button>
           <button id="bm-star-btn" class="bm-star" onclick="toggleBookmark()" title="ブックマークする">
             <svg id="bm-icon" width="18" height="22" viewBox="0 0 18 22" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M2 2h14v18l-7-5-7 5V2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -492,6 +493,7 @@ let _autoSaveTimer=null; // 自動下書きタイマー
 const DRAFT_KEY='nippo_draft'; // 下書き保存キー
 const AUTO_SAVE_INTERVAL=10000; // 10秒
 const BACKUP_KEY='nippo_last_backup'; // 最終バックアップ記録キー
+const SUMMARY_GAS_URL=''; // ← GASのデプロイURLをここに貼る
 const BACKUP_WARN_DAYS=7;  // 何日バックアップなしで通知するか
 const BACKUP_WARN_MIN_ENTRIES=1; // その間に何件以上の記録がある場合に通知するか
 
@@ -1052,6 +1054,36 @@ function renderBookmarks(){
       <div class="bm-preview">${preview}</div>
     </div>`;
   }).join('');
+}
+
+// ─── SUMMARY ─────────────────────────────
+async function generateSummary(){
+  if(!SUMMARY_GAS_URL){
+    alert('GASのデプロイURLが設定されていません。\nindex.html内の SUMMARY_GAS_URL に設定してください。');
+    return;
+  }
+  const btn=document.getElementById('btn-summary');
+  btn.disabled=true;
+  btn.textContent='取得中…';
+  try{
+    const res=await fetch(SUMMARY_GAS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'generateSummary',date:selectedDate})
+    });
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error||'不明なエラー');
+    const ta=document.getElementById('entry-text');
+    const current=ta.value;
+    ta.value=data.summary+(current?'\n\n────────\n\n'+current:'');
+    ta.focus();
+    setDirty(true);
+  }catch(err){
+    alert('サマリーの取得に失敗しました：\n'+err.message);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='✦ サマリー';
+  }
 }
 
 // ─── SAVE ────────────────────────────────
