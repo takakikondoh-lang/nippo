@@ -1277,23 +1277,37 @@ ${taskLines}
 - 事実ベースで簡潔に
 - 余計な前置きや説明文は不要。箇条書きのみ出力すること`;
 
-  const res=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key':CLAUDE_API_KEY,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true'
-    },
-    body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',
-      max_tokens:1000,
-      messages:[{role:'user',content:prompt}]
-    })
-  });
-  const data=await res.json();
-  if(data.error) throw new Error(data.error.message);
-  return data.content[0].text;
+  const maxRetry=3;
+  for(let attempt=1;attempt<=maxRetry;attempt++){
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':CLAUDE_API_KEY,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const data=await res.json();
+    if(data.error){
+      const isOverloaded=data.error.type==='overloaded_error'||
+                         (data.error.message||'').toLowerCase().includes('overloaded');
+      if(isOverloaded&&attempt<maxRetry){
+        const wait=attempt*10000; // 10秒・20秒と段階的に待機
+        const btn=document.getElementById('btn-summary');
+        if(btn) btn.textContent=`混雑中… ${attempt}/${maxRetry-1}回リトライ`;
+        await new Promise(r=>setTimeout(r,wait));
+        continue;
+      }
+      throw new Error(data.error.message);
+    }
+    return data.content[0].text;
+  }
 }
 
 async function generateSummary(){
