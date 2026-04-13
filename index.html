@@ -281,6 +281,9 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
           </div>
           <button class="fmt-btn" onclick="fmtApply('divider')" title="区切り線を挿入">──</button>
           <span style="display:inline-block;width:4px"></span>
+          <button class="fmt-btn" id="btn-img" onclick="insertImage()" title="画像をDriveにアップして挿入">📎</button>
+          <input type="file" id="img-file-input" accept="image/*" style="display:none" onchange="handleImageFile(this)">
+          <span style="display:inline-block;width:4px"></span>
           <button id="btn-summary" class="btn" onclick="generateSummary()" title="今日の予定・メールからサマリーを生成">✦ サマリー</button>
           <button id="bm-star-btn" class="bm-star" onclick="toggleBookmark()" title="ブックマークする">
             <svg id="bm-icon" width="18" height="22" viewBox="0 0 18 22" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -514,7 +517,7 @@ const BACKUP_KEY='nippo_last_backup'; // 最終バックアップ記録キー
 
 // ─── OAuth / サマリー設定 ────────────────────────────
 const GCAL_CLIENT_ID='503377575059-qs56i6jolds19soudogiq4p2j5pjeo6c.apps.googleusercontent.com';
-const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly';
+const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.file';
 const TKM_URL='https://script.google.com/macros/s/AKfycbyz20HVKeYQOJMMMgmXEbmbjYnE5QkK38e9Ij887VNqmV8KwYECOfLRutwMbuqTq9IX8A/exec';
 const TKM_TOKEN='tkm-Xr9pK2mNvQ4wBj7L';
 let CLAUDE_API_KEY=localStorage.getItem('nippo_claude_key')||'';
@@ -1115,6 +1118,77 @@ function clearApiKey(){
   renderApiKeyStatus();
 }
 
+// ─── IMAGE INSERT ────────────────────────
+function insertImage(){
+  document.getElementById('img-file-input').click();
+}
+async function handleImageFile(input){
+  const file=input.files[0];
+  if(!file) return;
+  input.value='';
+  const btn=document.getElementById('btn-img');
+  btn.disabled=true;
+  btn.textContent='⏳';
+  try{
+    if(!googleToken) await googleSignIn();
+    const fileId=await uploadToDrive(file);
+    const ta=document.getElementById('entry-text');
+    const pos=ta.selectionStart;
+    const before=ta.value.slice(0,pos);
+    const after=ta.value.slice(pos);
+    const insert=(before.length&&!before.endsWith('\n')?'\n':'')+`[img:${fileId}]`+'\n';
+    ta.value=before+insert+after;
+    ta.selectionStart=ta.selectionEnd=pos+insert.length;
+    ta.focus();
+    setDirty(true);updateCC();
+  }catch(err){
+    alert('画像のアップロードに失敗しました：\n'+err.message);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='📎';
+  }
+}
+async function uploadToDrive(file){
+  // multipart/related でメタデータ＋ファイル本体を1リクエストで送信
+  const meta=JSON.stringify({name:file.name,mimeType:file.type});
+  const boundary='nippo_boundary_'+Date.now();
+  const body=await new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const b64=e.target.result.split(',')[1];
+      const body=[
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        meta,
+        `--${boundary}`,
+        `Content-Type: ${file.type}`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        b64,
+        `--${boundary}--`
+      ].join('\r\n');
+      resolve(body);
+    };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+  const res=await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+googleToken,
+        'Content-Type':`multipart/related; boundary=${boundary}`
+      },
+      body
+    }
+  );
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.error?.message||'Drive upload failed');
+  return data.id;
+}
+
 // ─── SUMMARY ─────────────────────────────
 let _gTokenClient=null;
 function googleSignIn(){
@@ -1403,30 +1477,70 @@ function renderSlot(id,ds,diff){
 const URL_RE=/https?:\/\/[^\s\u3000\u300c\u300d\uff08\uff09\u3001\u3002\uff0c\uff0e"'<>()\[\]]+/g;
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function renderText(text,container){
+  container.innerHTML='';
   const lines=text.split('\n');
-  const html=lines.map(line=>{
+  lines.forEach(line=>{
+    // 画像 [img:fileId]
+    const imgm=line.match(/^\[img:([^\]]+)\]$/);
+    if(imgm){
+      const fileId=imgm[1];
+      const imgEl=document.createElement('img');
+      imgEl.style.cssText='max-width:100%;border-radius:6px;margin:.4rem 0;display:block';
+      if(googleToken){
+        const headers=new Headers({Authorization:'Bearer '+googleToken});
+        fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,{headers})
+          .then(r=>r.blob())
+          .then(b=>{imgEl.src=URL.createObjectURL(b);})
+          .catch(()=>{imgEl.replaceWith(makeTextNode('（画像の読み込みに失敗しました）'));});
+      } else {
+        const ph=document.createElement('div');
+        ph.style.cssText='color:var(--ink-faint);font-style:italic;font-size:.88rem';
+        ph.textContent='（画像を表示するにはGoogleログインが必要です）';
+        container.appendChild(ph);
+        return;
+      }
+      container.appendChild(imgEl);
+      return;
+    }
+    // その他は従来通りHTML文字列で生成してdivに挿入
     const e=esc(line);
-    // 見出し h1〜h3
     const hm=e.match(/^(#{1,3})\s+(.+)/);
     if(hm){
       const lv=hm[1].length;
       const sz=['1.15rem','1rem','.9rem'][lv-1];
       const mt=lv===1?'1.1rem':'.7rem';
-      return `<div style="font-weight:500;font-size:${sz};color:var(--ink);margin-top:${mt};margin-bottom:.2rem;line-height:1.5">${applyInline(hm[2])}</div>`;
+      const d=document.createElement('div');
+      d.style.cssText=`font-weight:500;font-size:${sz};color:var(--ink);margin-top:${mt};margin-bottom:.2rem;line-height:1.5`;
+      d.innerHTML=applyInline(hm[2]);
+      container.appendChild(d);return;
     }
-    // 引用
     if(e.match(/^&gt;\s*/)){
-      const inner=e.replace(/^&gt;\s*/,'');
-      return `<div style="border-left:3px solid var(--accent-light);padding-left:.75rem;color:var(--ink-mid);margin:.2rem 0">${applyInline(inner)}</div>`;
+      const d=document.createElement('div');
+      d.style.cssText='border-left:3px solid var(--accent-light);padding-left:.75rem;color:var(--ink-mid);margin:.2rem 0';
+      d.innerHTML=applyInline(e.replace(/^&gt;\s*/,''));
+      container.appendChild(d);return;
     }
-    // 区切り線
     if(line.match(/^[─━ー]{4,}$/)){
-      return `<hr style="border:none;border-top:1px solid var(--rule);margin:.6rem 0">`;
+      const hr=document.createElement('hr');
+      hr.style.cssText='border:none;border-top:1px solid var(--rule);margin:.6rem 0';
+      container.appendChild(hr);return;
     }
-    // 通常行（空行は改行）
-    return e.trim()===''?'<br>':'<div style="min-height:1.2em">'+applyInline(e)+'</div>';
-  }).join('');
-  container.innerHTML=html;
+    // 通常行
+    if(e.trim()===''){
+      container.appendChild(document.createElement('br'));
+    } else {
+      const d=document.createElement('div');
+      d.style.minHeight='1.2em';
+      d.innerHTML=applyInline(e);
+      container.appendChild(d);
+    }
+  });
+}
+function makeTextNode(s){
+  const d=document.createElement('div');
+  d.style.cssText='color:var(--ink-faint);font-style:italic;font-size:.88rem';
+  d.textContent=s;
+  return d;
 }
 function applyInline(s){
   // URLリンク
