@@ -1348,9 +1348,12 @@ async function generateSummary(){
 // ─── SAVE ────────────────────────────────
 function saveEntry(){
   const text=document.getElementById('entry-text').value.trim();
-  if(!text){alert('内容を入力してください。');return}
-  _doSave();
-  renderCal();renderStats();renderRight();populateExport();
+  if(text){
+    _doSave();
+    renderCal();renderStats();renderRight();populateExport();
+  } else {
+    setDirty(false);
+  }
   setEditMode(false, text);
 }
 function _doSave(){
