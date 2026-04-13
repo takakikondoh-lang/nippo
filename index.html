@@ -1116,20 +1116,29 @@ function clearApiKey(){
 }
 
 // ─── SUMMARY ─────────────────────────────
+let _gTokenClient=null;
 function googleSignIn(){
   return new Promise((resolve,reject)=>{
-    const client=google.accounts.oauth2.initTokenClient({
-      client_id:GCAL_CLIENT_ID,
-      scope:GCAL_SCOPE,
-      callback:(resp)=>{
-        if(resp.error){reject(resp.error);return;}
-        googleToken=resp.access_token;
-        resolve(resp.access_token);
-      }
-    });
-    client.requestAccessToken();
+    if(!_gTokenClient){
+      _gTokenClient=google.accounts.oauth2.initTokenClient({
+        client_id:GCAL_CLIENT_ID,
+        scope:GCAL_SCOPE,
+        prompt:'',          // 既存セッションがあればアカウント選択UIをスキップ
+        callback:(resp)=>{
+          if(resp.error){reject(resp.error);return;}
+          googleToken=resp.access_token;
+          // expires_in（秒）の55分後にトークンを自動クリア
+          const expires=(parseInt(resp.expires_in||3600,10)-300)*1000;
+          clearTimeout(_gTokenExpiry);
+          _gTokenExpiry=setTimeout(()=>{googleToken=null;},expires);
+          resolve(resp.access_token);
+        }
+      });
+    }
+    _gTokenClient.requestAccessToken();
   });
 }
+let _gTokenExpiry=null;
 
 async function fetchCalendarEvents(dateStr){
   const [y,m,d]=dateStr.split('-').map(Number);
