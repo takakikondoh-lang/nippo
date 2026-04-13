@@ -382,6 +382,20 @@ header{height:var(--hh);flex-shrink:0;border-bottom:1px solid var(--rule);paddin
           </div>
         </div>
 
+        <!-- API設定 -->
+        <div class="sbox">
+          <div class="box-label">API 設定</div>
+          <div style="margin-top:.75rem">
+            <div style="font-family:var(--mono);font-size:.68rem;color:var(--ink-light);margin-bottom:.4rem">Anthropic API キー</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="password" id="apikey-input" placeholder="sk-ant-..." style="flex:1;font-family:var(--mono);font-size:.75rem;padding:6px 10px;background:var(--paper);border:1px solid var(--ink-faint);border-radius:var(--r);color:var(--ink);outline:none;min-width:0">
+              <button class="btn primary" style="flex-shrink:0;white-space:nowrap" onclick="saveApiKey()">保存</button>
+              <button class="btn" style="flex-shrink:0;white-space:nowrap;color:#c0392b;border-color:#e8b4b0" onclick="clearApiKey()">削除</button>
+            </div>
+            <div id="apikey-status" style="font-family:var(--mono);font-size:.65rem;margin-top:.4rem;line-height:1.6"></div>
+          </div>
+        </div>
+
         <!-- 全件操作 -->
         <div class="sbox">
           <div class="box-label">全件操作</div>
@@ -501,9 +515,9 @@ const BACKUP_KEY='nippo_last_backup'; // 最終バックアップ記録キー
 // ─── OAuth / サマリー設定 ────────────────────────────
 const GCAL_CLIENT_ID='503377575059-qs56i6jolds19soudogiq4p2j5pjeo6c.apps.googleusercontent.com';
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly';
-const CLAUDE_API_KEY=''; // ← Anthropic APIキーをここに貼る
 const TKM_URL='https://script.google.com/macros/s/AKfycbyz20HVKeYQOJMMMgmXEbmbjYnE5QkK38e9Ij887VNqmV8KwYECOfLRutwMbuqTq9IX8A/exec';
 const TKM_TOKEN='tkm-Xr9pK2mNvQ4wBj7L';
+let CLAUDE_API_KEY=localStorage.getItem('nippo_claude_key')||'';
 let googleToken=null;
 const BACKUP_WARN_DAYS=7;  // 何日バックアップなしで通知するか
 const BACKUP_WARN_MIN_ENTRIES=1; // その間に何件以上の記録がある場合に通知するか
@@ -926,7 +940,7 @@ function switchView(name){
   document.getElementById('vstats').style.display=name==='stats'?'flex':'none';
   document.getElementById('vbookmark').style.display=name==='bookmark'?'flex':'none';
   if(name==='list')renderList();
-  if(name==='stats'){renderStats();populateExport()}
+  if(name==='stats'){renderStats();populateExport();renderApiKeyStatus()}
   if(name==='bookmark')renderBookmarks();
 }
 
@@ -1068,6 +1082,39 @@ function renderBookmarks(){
   }).join('');
 }
 
+// ─── API KEY SETTINGS ────────────────────
+function renderApiKeyStatus(){
+  const status=document.getElementById('apikey-status');
+  const input=document.getElementById('apikey-input');
+  if(!status||!input) return;
+  if(CLAUDE_API_KEY){
+    status.style.color='var(--accent)';
+    status.textContent='✓ APIキー設定済み（'+(CLAUDE_API_KEY.slice(0,10))+'…）';
+    input.value='';
+    input.placeholder='変更する場合は新しいキーを入力';
+  } else {
+    status.style.color='#c0392b';
+    status.textContent='未設定 — サマリー機能を使うにはキーが必要です';
+    input.placeholder='sk-ant-...';
+  }
+}
+function saveApiKey(){
+  const val=document.getElementById('apikey-input').value.trim();
+  if(!val){alert('APIキーを入力してください。');return;}
+  if(!val.startsWith('sk-ant-')){
+    if(!confirm('入力値が "sk-ant-" で始まっていません。このまま保存しますか？')) return;
+  }
+  localStorage.setItem('nippo_claude_key',val);
+  CLAUDE_API_KEY=val;
+  renderApiKeyStatus();
+}
+function clearApiKey(){
+  if(!confirm('保存済みのAPIキーを削除します。よろしいですか？')) return;
+  localStorage.removeItem('nippo_claude_key');
+  CLAUDE_API_KEY='';
+  renderApiKeyStatus();
+}
+
 // ─── SUMMARY ─────────────────────────────
 function googleSignIn(){
   return new Promise((resolve,reject)=>{
@@ -1183,7 +1230,9 @@ ${taskLines}
 
 async function generateSummary(){
   if(!CLAUDE_API_KEY){
-    alert('CLAUDE_API_KEY が設定されていません。\nindex.html内の CLAUDE_API_KEY に設定してください。');
+    if(confirm('Anthropic APIキーが未設定です。\n「機能」タブのAPI設定から登録できます。\n\n今すぐ機能タブを開きますか？')){
+      switchView('stats');
+    }
     return;
   }
   const btn=document.getElementById('btn-summary');
