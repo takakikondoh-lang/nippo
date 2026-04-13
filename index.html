@@ -1133,17 +1133,51 @@ function googleSignIn(){
 
 async function fetchCalendarEvents(dateStr){
   const [y,m,d]=dateStr.split('-').map(Number);
-  const timeMin=new Date(y,m-1,d,0,0,0).toISOString();
-  const timeMax=new Date(y,m-1,d,23,59,59).toISOString();
-  const url=`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`;
-  const res=await fetch(url,{headers:{Authorization:'Bearer '+googleToken}});
-  const data=await res.json();
-  if(!data.items||data.items.length===0) return['予定なし'];
-  return data.items.map(ev=>{
-    const start=ev.start.dateTime?ev.start.dateTime.slice(11,16):ev.start.date;
-    const end=ev.end.dateTime?ev.end.dateTime.slice(11,16):'';
-    return`${start}${end?'〜'+end:''} ${ev.summary||'（タイトルなし）'}`;
-  });
+  // JSTで当日0:00〜23:59:59 → UTC変換（JST=UTC+9）
+  const timeMin=new Date(Date.UTC(y,m-1,d,0,0,0)-9*60*60*1000).toISOString();
+  const timeMax=new Date(Date.UTC(y,m-1,d,23,59,59)-9*60*60*1000).toISOString();
+
+  // 全カレンダー一覧を取得
+  let calIds=['primary'];
+  try{
+    const lr=await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList',{
+      headers:{Authorization:'Bearer '+googleToken}
+    });
+    const ld=await lr.json();
+    if(ld.items&&ld.items.length>0){
+      calIds=ld.items
+        .filter(c=>c.selected!==false)
+        .map(c=>c.id);
+    }
+  }catch(e){}
+
+  // 全カレンダーから予定を取得して統合
+  const allEvents=[];
+  await Promise.all(calIds.map(async calId=>{
+    try{
+      const url=`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`;
+      const res=await fetch(url,{headers:{Authorization:'Bearer '+googleToken}});
+      const data=await res.json();
+      if(data.items&&data.items.length>0){
+        data.items.forEach(ev=>{
+          const start=ev.start.dateTime?ev.start.dateTime.slice(11,16):ev.start.date;
+          const end=ev.end.dateTime?ev.end.dateTime.slice(11,16):'';
+          allEvents.push({
+            time:start,
+            text:`${start}${end?'〜'+end:''} ${ev.summary||'（タイトルなし）'}`
+          });
+        });
+      }
+    }catch(e){}
+  }));
+
+  if(allEvents.length===0) return['予定なし'];
+  // 時刻順ソート＋重複除去
+  allEvents.sort((a,b)=>a.time.localeCompare(b.time));
+  const seen=new Set();
+  return allEvents
+    .filter(ev=>{ if(seen.has(ev.text)) return false; seen.add(ev.text); return true; })
+    .map(ev=>ev.text);
 }
 
 async function fetchGmailThreads(dateStr){
