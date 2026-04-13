@@ -502,6 +502,8 @@ const BACKUP_KEY='nippo_last_backup'; // 最終バックアップ記録キー
 const GCAL_CLIENT_ID='503377575059-qs56i6jolds19soudogiq4p2j5pjeo6c.apps.googleusercontent.com';
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly';
 const CLAUDE_API_KEY=''; // ← Anthropic APIキーをここに貼る
+const TKM_URL='https://script.google.com/macros/s/AKfycbyz20HVKeYQOJMMMgmXEbmbjYnE5QkK38e9Ij887VNqmV8KwYECOfLRutwMbuqTq9IX8A/exec';
+const TKM_TOKEN='tkm-Xr9pK2mNvQ4wBj7L';
 let googleToken=null;
 const BACKUP_WARN_DAYS=7;  // 何日バックアップなしで通知するか
 const BACKUP_WARN_MIN_ENTRIES=1; // その間に何件以上の記録がある場合に通知するか
@@ -1120,9 +1122,30 @@ async function fetchGmailThreads(dateStr){
   return items;
 }
 
-async function callClaudeAPI(dateStr,events,mails){
+async function fetchCompletedTasks(dateStr){
+  try{
+    const res=await fetch(
+      `${TKM_URL}?action=completed&date=${dateStr}&token=${TKM_TOKEN}`,
+      {redirect:'follow'}
+    );
+    const data=await res.json();
+    return data.tasks||[];
+  }catch(e){
+    return [];
+  }
+}
+
+async function callClaudeAPI(dateStr,events,mails,tasks){
   if(!CLAUDE_API_KEY) throw new Error('CLAUDE_API_KEY が設定されていません');
-  const prompt=`以下は${dateStr}の予定とメールのやりとりです。
+  const taskLines=tasks.length===0
+    ?'完了タスクなし'
+    :tasks.map(t=>{
+        const prio=t.prio?`【${t.prio}】`:'';
+        const cat=t.cat?`[${t.cat}]`:'';
+        const memo=t.memo?` ※${t.memo}`:'';
+        return`・${prio}${t.title}${cat}${memo}`;
+      }).join('\n');
+  const prompt=`以下は${dateStr}の予定・メール・完了タスクです。
 これをもとに、業務日報の冒頭に挿入する簡潔なサマリーを作成してください。
 
 【本日の予定】
@@ -1130,6 +1153,9 @@ ${events.join('\n')}
 
 【メールのやりとり】
 ${mails.join('\n')}
+
+【本日完了したタスク】
+${taskLines}
 
 出力形式：
 - 箇条書き（・）で3〜6行程度
@@ -1166,13 +1192,17 @@ async function generateSummary(){
   try{
     if(!googleToken) await googleSignIn();
     btn.textContent='取得中…';
-    const events=await fetchCalendarEvents(selectedDate);
-    const mails=await fetchGmailThreads(selectedDate);
+    const [events,mails,tasks]=await Promise.all([
+      fetchCalendarEvents(selectedDate),
+      fetchGmailThreads(selectedDate),
+      fetchCompletedTasks(selectedDate)
+    ]);
     btn.textContent='生成中…';
-    const summary=await callClaudeAPI(selectedDate,events,mails);
+    const summary=await callClaudeAPI(selectedDate,events,mails,tasks);
     const ta=document.getElementById('entry-text');
     const current=ta.value;
-    ta.value=summary+(current?'\n\n────────\n\n'+current:'');
+    const taskNote=tasks.length>0?`\n※ 完了タスク ${tasks.length} 件を反映（タスクマネージャーの「今すぐ同期」済みであることを確認してください）`:'';
+    ta.value=summary+(taskNote?'\n'+taskNote:'')+(current?'\n\n────────\n\n'+current:'');
     ta.focus();
     setDirty(true);
   }catch(err){
